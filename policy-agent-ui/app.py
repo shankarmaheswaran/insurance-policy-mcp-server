@@ -42,9 +42,12 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
     body = None
     headers = {"Accept": "application/json"}
     agent_role = request.headers.get("X-Policy-Agent-Role")
+    agent_username = request.headers.get("X-Policy-Agent-Username")
     agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
     if agent_role:
         headers["X-Policy-Agent-Role"] = agent_role
+    if agent_username:
+        headers["X-Policy-Agent-Username"] = agent_username
     if agent_customer_id:
         headers["X-Policy-Agent-Customer-Id"] = agent_customer_id
     if payload is not None:
