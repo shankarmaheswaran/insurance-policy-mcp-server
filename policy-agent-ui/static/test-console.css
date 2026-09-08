@@ -643,6 +643,66 @@
     border: 1px solid var(--border-color);
 }
 
+.capability-summary {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    color: #1e40af;
+    font-weight: 800;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+}
+
+.capability-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.capability-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.capability-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.capability-title {
+    color: var(--primary-color);
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.capability-card p {
+    color: var(--text-light);
+    line-height: 1.45;
+    margin-bottom: 12px;
+}
+
+.capability-params {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.capability-param {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    color: var(--text-dark);
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.78em;
+    padding: 4px 6px;
+}
+
+.capability-param.empty {
+    color: var(--text-light);
+}
+
 .tool-doc {
     margin-bottom: 25px;
 }

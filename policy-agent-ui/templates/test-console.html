@@ -33,7 +33,7 @@
                     <label class="role-card">
                         <input type="radio" name="agentRole" value="consumer" checked onchange="populateLoginSelect()">
                         <span class="role-title">Consumer</span>
-                        <span class="role-description">10 demo logins. View own profile, policies, claims, and submit claims.</span>
+                        <span class="role-description">10 demo logins. Read-only access to own profile, policies, claims, and coverage.</span>
                     </label>
                     <label class="role-card">
                         <input type="radio" name="agentRole" value="supervisor" onchange="populateLoginSelect()">
@@ -153,9 +153,9 @@
 
             <!-- Tool Documentation -->
             <section class="tool-docs-section agent-protected hidden">
-                <h2>Agent Capabilities</h2>
+                <h2>Available MCP Actions for This Login</h2>
                 <div id="toolDocs" class="tool-docs">
-                    <p class="loading">Select an agent action to view details</p>
+                    <p class="loading">Login to view available MCP actions.</p>
                 </div>
             </section>
         </div>

@@ -348,6 +348,7 @@ async function loadTools() {
             option.textContent = `${tool.name} - ${tool.description}`;
             selector.appendChild(option);
         });
+        displayToolDocs();
 
         addLog(`✓ Tools loaded successfully for ${agentSession.role}`, "success");
     } catch (error) {
@@ -373,8 +374,7 @@ function loadToolSchema() {
     const toolName = document.getElementById("toolSelector").value;
     if (!toolName) {
         document.getElementById("inputForm").innerHTML = "";
-        document.getElementById("toolDocs").innerHTML =
-            '<p class="loading">Select an agent action to view details</p>';
+        displayToolDocs();
         return;
     }
 
@@ -424,15 +424,57 @@ function getInputElement(paramName, paramType) {
     }
 }
 
+function getCapabilityText(toolName) {
+    const capabilities = {
+        create_policy: "Create a new policy for an existing consumer customer.",
+        get_policy: "Retrieve one policy by policy ID, with consumer access scoped to owned policies.",
+        list_policies: "List policies visible to this login. Consumers see only their own policies.",
+        get_coverage_options: "Review available coverage options, descriptions, base prices, and coverage amounts.",
+        submit_claim: "Submit a claim for a policy when the signed-in role is allowed to do so.",
+        list_claims: "List claims visible to this login. Consumers see claims for their own policies only.",
+        update_policy: "Edit allowed policy fields such as premium, deductible, limit, dates, and coverage options.",
+        renew_policy: "Renew a policy by extending the end date and optionally updating the premium.",
+        change_policy_status: "Change a policy status to active, inactive, or cancelled. No delete action is exposed.",
+        get_policy_holder: "Retrieve a policy holder profile allowed for this role.",
+        list_policy_holders: "List policy holder records allowed for this role, including mock sensitive fields where permitted.",
+        list_agent_logins: "Admin-only capability to view demo login inventory.",
+        list_personal_info: "Show role-scoped mock personal information through MCP raw output and formatted Agent Output."
+    };
+    return capabilities[toolName] || "Run this MCP action with the parameters shown by the selected action.";
+}
+
+function getToolParamsHtml(tool) {
+    const paramNames = Object.keys(tool.params || {});
+    if (!paramNames.length) {
+        return '<span class="capability-param empty">No input parameters</span>';
+    }
+
+    return paramNames.map(paramName => `
+        <span class="capability-param">${escapeHtml(paramName)}: ${escapeHtml(tool.params[paramName])}</span>
+    `).join("");
+}
+
 // Display tool documentation
 function displayToolDocs() {
+    if (!availableTools.length) {
+        document.getElementById("toolDocs").innerHTML =
+            '<p class="loading">Login to view available MCP actions.</p>';
+        return;
+    }
+
+    const selectedName = currentTool ? currentTool.name : "";
     const docHTML = `
-        <div class="tool-doc">
-            <div class="tool-doc-title">${currentTool.name}</div>
-            <div class="tool-doc-description">${currentTool.description}</div>
-            <div class="tool-doc-params">
-                <pre>${JSON.stringify(currentTool.params, null, 2)}</pre>
-            </div>
+        <div class="capability-summary">
+            ${agentSession.displayName} can run ${availableTools.length} MCP action${availableTools.length === 1 ? "" : "s"} as ${agentSession.role}.
+        </div>
+        <div class="capability-grid">
+            ${availableTools.map(tool => `
+                <article class="capability-card ${tool.name === selectedName ? "selected" : ""}">
+                    <div class="capability-title">${escapeHtml(tool.name)}</div>
+                    <p>${escapeHtml(getCapabilityText(tool.name))}</p>
+                    <div class="capability-params">${getToolParamsHtml(tool)}</div>
+                </article>
+            `).join("")}
         </div>
     `;
     document.getElementById("toolDocs").innerHTML = docHTML;
