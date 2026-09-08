@@ -157,30 +157,45 @@ async function openPersonalInfoDialog() {
     const dialog = document.getElementById("personalInfoDialog");
     const content = document.getElementById("personalInfoContent");
     const notice = document.getElementById("personalInfoNotice");
+    const rawOutput = document.getElementById("personalInfoRawOutput");
 
     dialog.classList.remove("hidden");
     content.innerHTML = '<p class="loading">Loading personal information from remote MCP backend...</p>';
     notice.textContent = "Mock sensitive data for demo validation only.";
+    rawOutput.textContent = JSON.stringify({ message: "Waiting for MCP response" }, null, 2);
 
     try {
-        const response = await fetch("/api/agent/personal-info", {
-            headers: getAgentHeaders()
+        const response = await fetch("/api/agent/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getAgentHeaders() },
+            body: JSON.stringify({
+                tool_name: "list_personal_info",
+                params: {}
+            })
         });
         const data = await response.json();
+        rawOutput.textContent = JSON.stringify(data, null, 2);
 
-        if (!response.ok) {
+        if (!response.ok || !data.success) {
             content.innerHTML = `<p class="loading">${escapeHtml(data.error || "Unable to load personal information")}</p>`;
             return;
         }
 
-        notice.textContent = data.mock_data_notice || "All sensitive data values are fake demo identifiers.";
+        const result = data.result || {};
+        notice.textContent = result.mock_data_notice || "All sensitive data values are fake demo identifiers.";
         content.innerHTML = `
-            ${renderPersonalInfoSection("Consumers", data.consumers || [])}
-            ${renderPersonalInfoSection("Supervisors", data.supervisors || [])}
+            ${renderPersonalInfoSection("Consumers", result.consumers || [])}
+            ${renderPersonalInfoSection("Supervisors", result.supervisors || [])}
         `;
+        (data.logs || []).forEach(logMsg => {
+            const level = logMsg.includes("[ERROR]") ? "error" :
+                logMsg.includes("[SUCCESS]") ? "success" : "info";
+            addLog(logMsg, level);
+        });
         addLog(`[PII] Loaded mock personal information for ${agentSession.displayName}`, "success");
     } catch (error) {
         content.innerHTML = `<p class="loading">${escapeHtml(error.message)}</p>`;
+        rawOutput.textContent = JSON.stringify({ error: error.message }, null, 2);
         addLog(`[ERROR] Personal information dialog failed: ${error.message}`, "error");
     }
 }

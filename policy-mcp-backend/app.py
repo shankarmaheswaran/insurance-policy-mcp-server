@@ -112,6 +112,12 @@ AGENT_TOOLS = [
         "allowed_roles": ["admin"],
         "params": {"role": "consumer|supervisor|admin (optional)"},
     },
+    {
+        "name": "list_personal_info",
+        "description": "List mock personal information visible to the signed-in role",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {},
+    },
 ]
 
 ROLE_PERMISSIONS = {
@@ -122,6 +128,7 @@ ROLE_PERMISSIONS = {
         "list_claims",
         "get_policy_holder",
         "list_policy_holders",
+        "list_personal_info",
     },
     "supervisor": {
         "get_policy",
@@ -135,6 +142,7 @@ ROLE_PERMISSIONS = {
         "change_policy_status",
         "get_policy_holder",
         "list_policy_holders",
+        "list_personal_info",
     },
     "admin": {tool["name"] for tool in AGENT_TOOLS},
 }
@@ -197,6 +205,40 @@ def serialize_personal_info(profile) -> dict:
         "annual_income": profile.annual_income,
         "family_members": profile.family_members,
         "customer_id": profile.customer_id,
+    }
+
+
+def get_personal_info_result(role: str, username: str) -> dict:
+    """Build role-scoped mock personal information result for MCP actions."""
+    if role == "consumer":
+        profile = store.get_agent_personal_info(username)
+        return {
+            "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
+            "consumers": [serialize_personal_info(profile)] if profile else [],
+            "supervisors": [],
+        }
+
+    if role == "supervisor":
+        profile = store.get_agent_personal_info(username)
+        return {
+            "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
+            "consumers": [
+                serialize_personal_info(profile)
+                for profile in store.list_agent_personal_info("consumer")
+            ],
+            "supervisors": [serialize_personal_info(profile)] if profile else [],
+        }
+
+    return {
+        "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
+        "consumers": [
+            serialize_personal_info(profile)
+            for profile in store.list_agent_personal_info("consumer")
+        ],
+        "supervisors": [
+            serialize_personal_info(profile)
+            for profile in store.list_agent_personal_info("supervisor")
+        ],
     }
 
 
@@ -488,6 +530,16 @@ def agent_execute_tool():
             result = [serialize_login(login) for login in logins]
             logs.append(f"[SUCCESS] Found {len(logins)} demo login accounts")
 
+        elif tool_name == "list_personal_info":
+            logs.append("[EXECUTING] Listing mock personal information...")
+            username = request.headers.get("X-Policy-Agent-Username", "")
+            result = get_personal_info_result(role, username)
+            logs.append(
+                "[SUCCESS] Returned "
+                f"{len(result['consumers'])} consumer records and "
+                f"{len(result['supervisors'])} supervisor records"
+            )
+
         else:
             logs.append(f"[ERROR] Unknown tool: {tool_name}")
             return jsonify(
@@ -532,42 +584,7 @@ def agent_get_personal_info():
     if role is None or not username:
         return jsonify({"error": "Login is required before viewing personal information"}), 401
 
-    if role == "consumer":
-        profile = store.get_agent_personal_info(username)
-        return jsonify(
-            {
-                "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
-                "consumers": [serialize_personal_info(profile)] if profile else [],
-                "supervisors": [],
-            }
-        )
-
-    if role == "supervisor":
-        profile = store.get_agent_personal_info(username)
-        return jsonify(
-            {
-                "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
-                "consumers": [
-                    serialize_personal_info(profile)
-                    for profile in store.list_agent_personal_info("consumer")
-                ],
-                "supervisors": [serialize_personal_info(profile)] if profile else [],
-            }
-        )
-
-    return jsonify(
-        {
-            "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
-            "consumers": [
-                serialize_personal_info(profile)
-                for profile in store.list_agent_personal_info("consumer")
-            ],
-            "supervisors": [
-                serialize_personal_info(profile)
-                for profile in store.list_agent_personal_info("supervisor")
-            ],
-        }
-    )
+    return jsonify(get_personal_info_result(role, username))
 
 
 if __name__ == "__main__":
