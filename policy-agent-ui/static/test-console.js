@@ -5,6 +5,7 @@ let currentTool = null;
 let logs = [];
 let loginOptions = [];
 let coverageCatalog = [];
+let routeToolError = "";
 let agentSession = {
     username: "",
     role: "",
@@ -56,11 +57,22 @@ function getAgentHeaders() {
 
 function setConnectionMode(mode) {
     connectionMode = mode === "mcp_gateway" ? "mcp_gateway" : "direct";
+    availableTools = [];
+    currentTool = null;
+    routeToolError = "";
     updateConnectionModeDisplay();
+    updateRouteModeItems();
+    document.getElementById("toolSelector").innerHTML = '<option value="">Loading route actions...</option>';
+    document.getElementById("inputForm").innerHTML = "";
+    displayToolDocs();
     addLog(`[ROUTE] Switched route to ${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct EC2"}`, "info");
     if (isLoggedIn()) {
         verifyConnection();
-        loadCoverageCatalog();
+        if (connectionMode === "direct") {
+            loadCoverageCatalog();
+        } else {
+            coverageCatalog = [];
+        }
         loadTools();
     }
 }
@@ -68,6 +80,30 @@ function setConnectionMode(mode) {
 function updateConnectionModeDisplay() {
     document.getElementById("directModeButton").classList.toggle("active", connectionMode === "direct");
     document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
+}
+
+function updateRouteModeItems() {
+    const container = document.getElementById("routeModeItems");
+    const routeLabel = connectionMode === "mcp_gateway" ? "MCP GW" : "Direct";
+    if (!isLoggedIn()) {
+        container.innerHTML = "Login to load route-specific MCP actions.";
+        return;
+    }
+
+    if (routeToolError) {
+        container.innerHTML = `<span class="route-mode-error">${escapeHtml(routeLabel)} items unavailable: ${escapeHtml(routeToolError)}</span>`;
+        return;
+    }
+
+    if (!availableTools.length) {
+        container.innerHTML = `${routeLabel} mode is selected. Actions will load from ${connectionMode === "mcp_gateway" ? "the Palo Alto / Portkey MCP Gateway" : "the EC2 MCP backend"}.`;
+        return;
+    }
+
+    container.innerHTML = `
+        <strong>${routeLabel} items:</strong>
+        ${availableTools.map(tool => `<span class="route-item-chip">${escapeHtml(tool.name)}</span>`).join("")}
+    `;
 }
 
 function restoreAgentSession() {
@@ -78,6 +114,7 @@ function restoreAgentSession() {
     }
     updateConnectionModeDisplay();
     updateRoleDisplay();
+    updateRouteModeItems();
 }
 
 async function loadLoginOptions() {
@@ -388,10 +425,27 @@ async function loadTools() {
         const response = await fetch("/api/agent/tools", {
             headers: getAgentHeaders()
         });
-        availableTools = await response.json();
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data)) {
+            routeToolError = data.error || `HTTP ${response.status}`;
+            availableTools = [];
+            currentTool = null;
+            const selector = document.getElementById("toolSelector");
+            selector.innerHTML = `<option value="">${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct"} actions unavailable</option>`;
+            document.getElementById("inputForm").innerHTML = "";
+            displayToolDocs();
+            updateRouteModeItems();
+            (data.logs || []).forEach(logMsg => addLog(logMsg, logMsg.includes("[ERROR]") ? "error" : "info"));
+            addLog(`✗ ${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct"} actions unavailable: ${routeToolError}`, "error");
+            return;
+        }
+
+        routeToolError = "";
+        availableTools = data;
 
         const selector = document.getElementById("toolSelector");
-        selector.innerHTML = '<option value="">-- Select an agent action --</option>';
+        selector.innerHTML = `<option value="">-- Select ${connectionMode === "mcp_gateway" ? "an MCP Gateway" : "a Direct"} action --</option>`;
         availableTools.forEach(tool => {
             const option = document.createElement("option");
             option.value = tool.name;
@@ -399,9 +453,14 @@ async function loadTools() {
             selector.appendChild(option);
         });
         displayToolDocs();
+        updateRouteModeItems();
 
-        addLog(`✓ Tools loaded successfully for ${agentSession.role}`, "success");
+        addLog(`✓ ${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct"} actions loaded successfully for ${agentSession.role}`, "success");
     } catch (error) {
+        routeToolError = error.message;
+        availableTools = [];
+        displayToolDocs();
+        updateRouteModeItems();
         addLog(`✗ Error loading tools: ${error.message}`, "error");
     }
 }
@@ -507,15 +566,17 @@ function getToolParamsHtml(tool) {
 // Display tool documentation
 function displayToolDocs() {
     if (!availableTools.length) {
-        document.getElementById("toolDocs").innerHTML =
-            '<p class="loading">Login to view available MCP actions.</p>';
+        const modeLabel = connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct";
+        document.getElementById("toolDocs").innerHTML = routeToolError
+            ? `<p class="loading">${modeLabel} actions unavailable: ${escapeHtml(routeToolError)}</p>`
+            : `<p class="loading">Login or switch route to view ${modeLabel} MCP actions.</p>`;
         return;
     }
 
     const selectedName = currentTool ? currentTool.name : "";
     const docHTML = `
         <div class="capability-summary">
-            ${agentSession.displayName} can run ${availableTools.length} MCP action${availableTools.length === 1 ? "" : "s"} as ${agentSession.role}.
+            ${agentSession.displayName} can run ${availableTools.length} ${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct"} action${availableTools.length === 1 ? "" : "s"} as ${agentSession.role}.
         </div>
         <div class="capability-grid">
             ${availableTools.map(tool => `

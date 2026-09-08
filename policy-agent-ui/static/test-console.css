@@ -127,6 +127,35 @@
     color: white;
 }
 
+.route-mode-items {
+    color: var(--text-light);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    line-height: 1.5;
+    margin-top: 14px;
+}
+
+.route-item-chip {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    color: #1e40af;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.78em;
+    font-weight: 800;
+    padding: 3px 8px;
+}
+
+.route-mode-error {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    color: #991b1b;
+    font-weight: 800;
+    padding: 8px 10px;
+}
+
 .personal-info-section {
     margin-bottom: 24px;
 }
