@@ -4,6 +4,7 @@ let availableTools = [];
 let currentTool = null;
 let logs = [];
 let loginOptions = [];
+let coverageCatalog = [];
 let agentSession = {
     username: "",
     role: "",
@@ -130,6 +131,7 @@ function loginAgent() {
     clearLogs();
     addLog(`[AUTH] Logged in as ${agentSession.role}${agentSession.customerId ? ` with customer scope ${agentSession.customerId}` : ""}`, "success");
     verifyConnection();
+    loadCoverageCatalog();
     loadTools();
 }
 
@@ -258,6 +260,19 @@ async function loadTools() {
     }
 }
 
+async function loadCoverageCatalog() {
+    try {
+        const response = await fetch("/api/coverage-options", {
+            headers: getAgentHeaders()
+        });
+        coverageCatalog = await response.json();
+        addLog(`✓ Loaded ${coverageCatalog.length} coverage definitions from remote MCP backend`, "success");
+    } catch (error) {
+        coverageCatalog = [];
+        addLog(`✗ Error loading coverage definitions: ${error.message}`, "error");
+    }
+}
+
 // Load tool schema and create form
 function loadToolSchema() {
     const toolName = document.getElementById("toolSelector").value;
@@ -347,6 +362,33 @@ function normalizePolicies(result) {
     return rows.filter(item => item && item.id && item.customer_id && item.policy_type);
 }
 
+function getCoverageDetails(coverageIds) {
+    const selectedCoverage = coverageIds || [];
+    if (!selectedCoverage.length) {
+        return '<p class="coverage-empty">No optional coverage selected for this policy.</p>';
+    }
+
+    return selectedCoverage.map(coverageId => {
+        const coverage = coverageCatalog.find(item => item.id === coverageId);
+        if (!coverage) {
+            return `
+                <div class="coverage-detail-card">
+                    <strong>${escapeHtml(coverageId)}</strong>
+                    <span>Coverage definition not found in the remote catalog.</span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="coverage-detail-card">
+                <strong>${escapeHtml(coverage.name)} <em>${escapeHtml(coverage.id)}</em></strong>
+                <span>${escapeHtml(coverage.description)}</span>
+                <small>Amount: ${formatCurrency(coverage.coverage_amount)} | Base price: ${formatCurrency(coverage.base_price)}</small>
+            </div>
+        `;
+    }).join("");
+}
+
 function renderPolicyTable(result) {
     const policies = normalizePolicies(result);
     const container = document.getElementById("policyTableContent");
@@ -391,7 +433,7 @@ function renderPolicyTable(result) {
                             <td colspan="8">
                                 <div class="policy-detail-grid">
                                     <div><strong>Deductible</strong><span>${formatCurrency(policy.deductible)}</span></div>
-                                    <div><strong>Coverage Options</strong><span>${escapeHtml((policy.coverage_options || []).join(", ") || "None")}</span></div>
+                                    <div class="coverage-detail-section"><strong>Coverage Details</strong>${getCoverageDetails(policy.coverage_options)}</div>
                                     <div><strong>Raw Policy</strong><pre>${escapeHtml(JSON.stringify(policy, null, 2))}</pre></div>
                                 </div>
                             </td>

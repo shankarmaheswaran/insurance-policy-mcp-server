@@ -424,6 +424,34 @@
     white-space: pre-wrap;
 }
 
+.coverage-detail-section {
+    grid-column: span 2;
+}
+
+.coverage-detail-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-top: 8px;
+    padding: 10px;
+}
+
+.coverage-detail-card em {
+    color: var(--text-light);
+    font-style: normal;
+    font-weight: 600;
+}
+
+.coverage-detail-card small {
+    color: var(--text-light);
+    display: block;
+    margin-top: 6px;
+}
+
+.coverage-empty {
+    color: var(--text-light);
+    margin: 8px 0 0;
+}
+
 .logs-panel {
     grid-column: 1 / -1;
     border-left: 4px solid #f59e0b;
