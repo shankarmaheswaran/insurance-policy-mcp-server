@@ -23,6 +23,54 @@ curl http://127.0.0.1:5000/api/policies
 python3 -m pytest tests/ -q
 ```
 
+## OAuth 2.1 Metadata for MCP Gateway
+
+The backend exposes OAuth-style discovery metadata that can be provided to a Palo Alto / Portkey MCP Gateway.
+
+Metadata URLs for this EC2 instance:
+
+```text
+Protected resource metadata:
+http://35.165.75.205:5000/.well-known/oauth-protected-resource
+
+Authorization server metadata:
+http://35.165.75.205:5000/.well-known/oauth-authorization-server
+
+OpenID discovery alias:
+http://35.165.75.205:5000/.well-known/openid-configuration
+
+JWKS:
+http://35.165.75.205:5000/oauth/jwks
+
+Token introspection:
+http://35.165.75.205:5000/oauth/introspect
+```
+
+Configure public metadata values with environment variables:
+
+```bash
+MCP_PUBLIC_BASE_URL=http://35.165.75.205:5000 \
+OAUTH_ISSUER=http://35.165.75.205:5000 \
+OAUTH_AUDIENCE=http://35.165.75.205:5000/insurance-mcp/mcp \
+HOST=0.0.0.0 PORT=5000 FLASK_DEBUG=0 python app.py
+```
+
+Optional demo bearer-token enforcement:
+
+```bash
+OAUTH_ENFORCE=1 \
+OAUTH_DEMO_BEARER_TOKEN=<demo-token-value> \
+HOST=0.0.0.0 PORT=5000 FLASK_DEBUG=0 python app.py
+```
+
+When `OAUTH_ENFORCE=1`, `/api/*` requests must include:
+
+```text
+Authorization: Bearer <demo-token-value>
+```
+
+For production use, place this service behind HTTPS and use a real external OAuth 2.1 / OIDC authorization server. The included JWKS and introspection endpoints are demo metadata helpers for gateway integration testing.
+
 ## Policy Agent Roles
 
 The backend enforces role-based access for `/api/agent/tools` and `/api/agent/execute` using headers from the laptop Policy Agent UI:

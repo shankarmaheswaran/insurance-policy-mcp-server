@@ -13,6 +13,13 @@ from src.types_import import CreatePolicyInput, SubmitClaimInput
 app = Flask(__name__)
 store = PolicyStore()
 
+PUBLIC_BASE_URL = os.getenv("MCP_PUBLIC_BASE_URL", "http://35.165.75.205:5000").rstrip("/")
+OAUTH_ISSUER = os.getenv("OAUTH_ISSUER", PUBLIC_BASE_URL).rstrip("/")
+OAUTH_AUDIENCE = os.getenv("OAUTH_AUDIENCE", f"{PUBLIC_BASE_URL}/insurance-mcp/mcp")
+OAUTH_ENFORCE = os.getenv("OAUTH_ENFORCE", "0") == "1"
+OAUTH_DEMO_BEARER_TOKEN = os.getenv("OAUTH_DEMO_BEARER_TOKEN", "")
+OAUTH_SCOPES = ["mcp:tools", "policy:read", "policy:write", "claims:read", "claims:write"]
+
 AGENT_TOOLS = [
     {
         "name": "create_policy",
@@ -147,6 +154,66 @@ ROLE_PERMISSIONS = {
     "admin": {tool["name"] for tool in AGENT_TOOLS},
 }
 
+OAUTH_PUBLIC_PATHS = {
+    "/health",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/openid-configuration",
+    "/oauth/jwks",
+    "/oauth/introspect",
+}
+
+
+@app.before_request
+def require_oauth_bearer_token():
+    """Optionally require a bearer token for protected API requests."""
+    if not OAUTH_ENFORCE or request.path in OAUTH_PUBLIC_PATHS:
+        return None
+    if not request.path.startswith("/api/"):
+        return None
+
+    expected_token = OAUTH_DEMO_BEARER_TOKEN
+    auth_header = request.headers.get("Authorization", "")
+    if not expected_token:
+        return jsonify({"error": "OAuth enforcement is enabled but no demo token is configured"}), 503
+    if auth_header != f"Bearer {expected_token}":
+        return jsonify({"error": "OAuth bearer token required"}), 401
+    return None
+
+
+def authorization_server_metadata() -> dict:
+    """Build OAuth 2.1 authorization server metadata for gateway discovery."""
+    return {
+        "issuer": OAUTH_ISSUER,
+        "authorization_endpoint": f"{OAUTH_ISSUER}/oauth/authorize",
+        "token_endpoint": f"{OAUTH_ISSUER}/oauth/token",
+        "jwks_uri": f"{OAUTH_ISSUER}/oauth/jwks",
+        "introspection_endpoint": f"{OAUTH_ISSUER}/oauth/introspect",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt",
+            "none",
+        ],
+        "scopes_supported": OAUTH_SCOPES,
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+    }
+
+
+def protected_resource_metadata() -> dict:
+    """Build OAuth protected resource metadata for this MCP backend."""
+    return {
+        "resource": OAUTH_AUDIENCE,
+        "authorization_servers": [OAUTH_ISSUER],
+        "bearer_methods_supported": ["Bearer"],
+        "resource_documentation": f"{PUBLIC_BASE_URL}/health",
+        "scopes_supported": OAUTH_SCOPES,
+    }
+
 
 def get_agent_context() -> tuple[str | None, str | None]:
     """Read the role context sent by the laptop Policy Agent UI."""
@@ -246,6 +313,41 @@ def error_result(message: str, logs: list[str], status_code: int = 403):
     """Return a consistent Policy Agent error response."""
     logs.append(f"[ERROR] {message}")
     return jsonify({"success": False, "result": None, "logs": logs, "error": message}), status_code
+
+
+@app.route("/.well-known/oauth-protected-resource", methods=["GET"])
+def oauth_protected_resource_metadata():
+    """OAuth protected resource metadata for MCP gateway discovery."""
+    return jsonify(protected_resource_metadata())
+
+
+@app.route("/.well-known/oauth-authorization-server", methods=["GET"])
+@app.route("/.well-known/openid-configuration", methods=["GET"])
+def oauth_authorization_server_metadata():
+    """OAuth authorization server metadata for MCP gateway discovery."""
+    return jsonify(authorization_server_metadata())
+
+
+@app.route("/oauth/jwks", methods=["GET"])
+def oauth_jwks():
+    """Demo JWKS endpoint for OAuth discovery."""
+    return jsonify({"keys": []})
+
+
+@app.route("/oauth/introspect", methods=["POST"])
+def oauth_introspect():
+    """Demo token introspection endpoint for gateway validation."""
+    token = request.form.get("token") or (request.json or {}).get("token") if request.is_json else request.form.get("token")
+    active = bool(OAUTH_DEMO_BEARER_TOKEN and token == OAUTH_DEMO_BEARER_TOKEN)
+    return jsonify(
+        {
+            "active": active,
+            "iss": OAUTH_ISSUER if active else None,
+            "aud": OAUTH_AUDIENCE if active else None,
+            "scope": " ".join(OAUTH_SCOPES) if active else "",
+            "token_type": "Bearer" if active else None,
+        }
+    )
 
 
 @app.route("/health", methods=["GET"])
