@@ -176,12 +176,134 @@ def check_mcp_gateway() -> dict:
         }
 
 
+def read_gateway_json(response) -> dict:
+    """Read JSON or simple SSE data JSON from an MCP gateway response."""
+    response_text = response.read().decode("utf-8")
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        for line in response_text.splitlines():
+            if line.startswith("data:"):
+                data = line.removeprefix("data:").strip()
+                if data and data != "[DONE]":
+                    return json.loads(data)
+        raise
+
+
+def mcp_gateway_rpc(method: str, params: dict | None = None) -> tuple[dict, int, list[str]]:
+    """Call the configured MCP gateway using MCP JSON-RPC over HTTP."""
+    headers, header_names, logs = load_gateway_headers()
+    headers.update(
+        {
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+        }
+    )
+    logs.append(f"[CONFIG] MCP Gateway URL: {MCP_GATEWAY_URL}")
+    logs.append(f"[CONFIG] Credential headers configured: {', '.join(header_names) if header_names else 'none'}")
+    logs.append(f"[MCP] JSON-RPC method: {method}")
+
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params or {},
+        }
+    ).encode("utf-8")
+    ssl_context = None if MCP_GATEWAY_VERIFY_SSL else ssl._create_unverified_context()
+
+    try:
+        gateway_request = Request(MCP_GATEWAY_URL, data=body, headers=headers, method="POST")
+        with urlopen(gateway_request, timeout=15, context=ssl_context) as response:
+            payload = read_gateway_json(response)
+            logs.append(f"[SUCCESS] MCP gateway returned HTTP {response.status}")
+            return payload, response.status, logs
+    except HTTPError as error:
+        error_body = error.read().decode("utf-8")
+        logs.append(f"[ERROR] MCP gateway returned HTTP {error.code}: {error.reason}")
+        return {
+            "error": error.reason,
+            "body": error_body,
+        }, error.code, logs
+    except (URLError, json.JSONDecodeError) as error:
+        logs.append(f"[ERROR] MCP gateway request failed: {error}")
+        return {"error": str(error)}, 502, logs
+
+
+def normalize_mcp_tools(payload: dict) -> list[dict]:
+    """Convert an MCP tools/list response to the UI's tool-list shape."""
+    tools = payload.get("result", {}).get("tools", []) if isinstance(payload, dict) else []
+    normalized = []
+    for tool in tools:
+        input_schema = tool.get("inputSchema", {})
+        properties = input_schema.get("properties", {}) if isinstance(input_schema, dict) else {}
+        params = {name: details.get("type", "value") for name, details in properties.items()}
+        normalized.append(
+            {
+                "name": tool.get("name", "unknown"),
+                "description": tool.get("description", "MCP gateway tool"),
+                "params": params,
+            }
+        )
+    return normalized
+
+
+def normalize_mcp_tool_result(payload: dict, logs: list[str]) -> dict:
+    """Convert an MCP tools/call response to the UI's action result shape."""
+    if "error" in payload:
+        return {"success": False, "result": None, "logs": logs, "error": payload["error"]}
+
+    result = payload.get("result", {}) if isinstance(payload, dict) else {}
+    content = result.get("content", []) if isinstance(result, dict) else []
+    parsed_result = result
+    if content and isinstance(content, list):
+        text = content[0].get("text") if isinstance(content[0], dict) else None
+        if text:
+            try:
+                parsed_result = json.loads(text)
+            except json.JSONDecodeError:
+                parsed_result = text
+
+    return {
+        "success": not result.get("isError", False) if isinstance(result, dict) else True,
+        "result": parsed_result,
+        "logs": logs,
+    }
+
+
+def mcp_gateway_proxy(path: str, payload: dict | None = None):
+    """Proxy supported UI API calls to the MCP gateway protocol."""
+    if path == "/api/agent/tools":
+        rpc_payload, status, logs = mcp_gateway_rpc("tools/list")
+        if status >= 400:
+            return jsonify({"error": rpc_payload.get("error"), "logs": logs}), status
+        return jsonify(normalize_mcp_tools(rpc_payload)), status
+
+    if path == "/api/agent/execute":
+        payload = payload or {}
+        rpc_payload, status, logs = mcp_gateway_rpc(
+            "tools/call",
+            {
+                "name": payload.get("tool_name"),
+                "arguments": payload.get("params", {}),
+            },
+        )
+        normalized = normalize_mcp_tool_result(rpc_payload, logs)
+        return jsonify(normalized), status
+
+    return jsonify({"error": f"MCP Gateway mode does not support REST path {path}"}), 400
+
+
 def backend_request(path: str, method: str = "GET", payload: dict | None = None):
     """Forward an API request through the selected Direct or MCP Gateway route."""
     mode, base_url = get_target_url()
     missing_target = require_target_url(base_url, mode)
     if missing_target:
         return missing_target
+
+    if mode == "mcp_gateway":
+        return mcp_gateway_proxy(path, payload)
 
     query_string = request.query_string.decode("utf-8")
     url = f"{base_url}{path}"
