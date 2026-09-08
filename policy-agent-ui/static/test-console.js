@@ -85,6 +85,7 @@ function updateConnectionModeDisplay() {
     document.getElementById("directModeButton").classList.toggle("active", connectionMode === "direct");
     document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
     document.getElementById("demoLabModeButton").classList.toggle("active", connectionMode === "demo_lab");
+    document.getElementById("activeRoute").textContent = getConnectionModeLabel();
     document.querySelectorAll(".gateway-only").forEach(element => {
         element.classList.toggle("hidden", connectionMode !== "mcp_gateway");
     });
@@ -123,7 +124,7 @@ function updateRouteModeItems() {
     const container = document.getElementById("routeModeItems");
     const routeLabel = getConnectionModeLabel();
     if (!isLoggedIn()) {
-        container.innerHTML = "Login to load route-specific MCP actions.";
+        container.innerHTML = `${routeLabel} selected. Choose a demo login next to load the matching experience.`;
         return;
     }
 

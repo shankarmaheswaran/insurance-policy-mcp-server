@@ -30,7 +30,7 @@
     color: var(--secondary-color);
 }
 
-.role-login-section {
+.flow-selection-section {
     order: 1;
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--primary-color);
@@ -40,6 +40,17 @@
     background: white;
 }
 
+.role-login-section {
+    order: 2;
+    border: 2px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    background: white;
+}
+
+.flow-selection-header,
 .role-login-header {
     display: flex;
     justify-content: space-between;
@@ -48,14 +59,17 @@
     margin-bottom: 18px;
 }
 
+.flow-selection-header h2,
 .role-login-header h2 {
     margin-bottom: 6px;
 }
 
+.flow-selection-header p,
 .role-login-header p {
     color: var(--text-light);
 }
 
+.active-route,
 .active-role {
     background: var(--light-bg);
     border: 1px solid var(--border-color);
@@ -105,7 +119,7 @@
 
 .role-login-actions {
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) auto auto auto auto;
+    grid-template-columns: minmax(240px, 1fr) auto auto auto;
     gap: 12px;
     align-items: center;
 }
@@ -198,7 +212,7 @@
 }
 
 .connection-section {
-    order: 3;
+    order: 4;
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--warning-color);
     border-radius: 8px;
@@ -313,7 +327,7 @@
 }
 
 .tool-selector-section {
-    order: 4;
+    order: 5;
     background: var(--light-bg);
     padding: 20px;
     border-radius: 8px;
@@ -332,7 +346,7 @@
 
 /* Test Area Layout */
 .test-area {
-    order: 5;
+    order: 6;
     display: grid;
     grid-template-columns: 1fr;
     gap: 22px;
@@ -584,7 +598,7 @@
 }
 
 .logs-panel {
-    order: 6;
+    order: 7;
     grid-column: 1 / -1;
     border-left: 4px solid #f59e0b;
     max-height: 400px;
@@ -830,7 +844,7 @@
 
 /* Tool Docs */
 .tool-docs-section {
-    order: 7;
+    order: 8;
     background: var(--light-bg);
     padding: 25px;
     border-radius: 8px;
@@ -909,7 +923,7 @@
 }
 
 .injection-tests-section {
-    order: 2;
+    order: 3;
     background: #fff7ed;
     border: 1px solid #fed7aa;
     border-radius: 8px;

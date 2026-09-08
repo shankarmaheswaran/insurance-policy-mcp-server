@@ -405,12 +405,7 @@ def agent_connection_check():
         f"[CONFIG] Selected route: {route_label}",
         f"[CONFIG] Selected route URL: {base_url}",
         f"[CONFIG] Selected route host/IP: {backend_host}",
-        f"[AUTH] Local UI login role: {agent_role}",
     ]
-    if agent_username:
-        logs.append(f"[AUTH] Local UI login: {agent_username}")
-    if agent_customer_id:
-        logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
 
     if mode == "mcp_gateway":
         rpc_payload, status, gateway_logs = mcp_gateway_rpc("tools/list")
@@ -452,6 +447,12 @@ def agent_connection_check():
                 "error": None if connected else rpc_payload.get("error", "MCP Gateway rejected request"),
             }
         ), 200 if connected else status
+
+    logs.append(f"[AUTH] Direct mode UI login role: {agent_role}")
+    if agent_username:
+        logs.append(f"[AUTH] Direct mode UI login: {agent_username}")
+    if agent_customer_id:
+        logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
 
     try:
         active_headers = {"Accept": "application/json"}

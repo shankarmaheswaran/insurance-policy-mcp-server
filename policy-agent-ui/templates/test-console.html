@@ -20,6 +20,25 @@
                 <a href="/" class="nav-link">← Back to Dashboard</a>
             </div>
 
+            <!-- Flow Selection -->
+            <section class="flow-selection-section" id="flowSelectionSection">
+                <div class="flow-selection-header">
+                    <div>
+                        <h2>Choose Flow</h2>
+                        <p>Select how the agent should route requests before choosing a demo login.</p>
+                    </div>
+                    <div class="active-route" id="activeRoute">Direct EC2</div>
+                </div>
+                <div class="route-toggle" role="group" aria-label="MCP route mode">
+                    <button type="button" id="directModeButton" class="route-toggle-button active" onclick="setConnectionMode('direct')">Direct</button>
+                    <button type="button" id="gatewayModeButton" class="route-toggle-button" onclick="setConnectionMode('mcp_gateway')">MCP GW</button>
+                    <button type="button" id="demoLabModeButton" class="route-toggle-button" onclick="setConnectionMode('demo_lab')">Demo Lab</button>
+                </div>
+                <div id="routeModeItems" class="route-mode-items">
+                    Direct mode uses the EC2 MCP backend. MCP GW mode uses YAML credentials to reach the Palo Alto / Portkey MCP Gateway. Demo Lab shows firewall validation scenarios.
+                </div>
+            </section>
+
             <!-- Role Login -->
             <section class="role-login-section" id="roleLoginSection">
                 <div class="role-login-header">
@@ -50,17 +69,9 @@
                     <select id="loginSelector" class="input-field" onchange="handleLoginSelection()">
                         <option value="">Loading demo logins...</option>
                     </select>
-                    <div class="route-toggle" role="group" aria-label="MCP route mode">
-                        <button type="button" id="directModeButton" class="route-toggle-button active" onclick="setConnectionMode('direct')">Direct</button>
-                        <button type="button" id="gatewayModeButton" class="route-toggle-button" onclick="setConnectionMode('mcp_gateway')">MCP GW</button>
-                        <button type="button" id="demoLabModeButton" class="route-toggle-button" onclick="setConnectionMode('demo_lab')">Demo Lab</button>
-                    </div>
                     <button onclick="loginAgent()" class="btn btn-primary">Login to Policy Agent</button>
                     <button onclick="showPersonalInfoInOutput()" class="btn btn-secondary agent-protected hidden">Personal Information</button>
                     <button onclick="logoutAgent()" class="btn btn-secondary">Logout</button>
-                </div>
-                <div id="routeModeItems" class="route-mode-items">
-                    Direct mode uses the EC2 MCP backend. MCP GW mode uses actions returned by the Palo Alto / Portkey MCP Gateway.
                 </div>
             </section>
 
