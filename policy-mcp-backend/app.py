@@ -215,6 +215,34 @@ def protected_resource_metadata() -> dict:
     }
 
 
+def mcp_tool_schema(tool: dict) -> dict:
+    """Convert internal tool metadata to MCP tool schema format."""
+    properties = {}
+    for name, type_description in tool.get("params", {}).items():
+        json_type = "array" if "array" in type_description else "number" if "number" in type_description else "string"
+        properties[name] = {"type": json_type, "description": type_description}
+
+    return {
+        "name": tool["name"],
+        "description": tool["description"],
+        "inputSchema": {
+            "type": "object",
+            "properties": properties,
+            "additionalProperties": False,
+        },
+    }
+
+
+def mcp_jsonrpc_result(request_id, result: dict):
+    """Return a JSON-RPC success response."""
+    return jsonify({"jsonrpc": "2.0", "id": request_id, "result": result})
+
+
+def mcp_jsonrpc_error(request_id, code: int, message: str):
+    """Return a JSON-RPC error response."""
+    return jsonify({"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}})
+
+
 def get_agent_context() -> tuple[str | None, str | None]:
     """Read the role context sent by the laptop Policy Agent UI."""
     role_header = request.headers.get("X-Policy-Agent-Role")
@@ -354,6 +382,41 @@ def oauth_introspect():
 def health_check():
     """Health check for load balancers and deployment validation."""
     return jsonify({"status": "ok", "service": "policy-mcp-backend"})
+
+
+@app.route("/insurance-mcp/mcp", methods=["GET", "POST"])
+def http_mcp_endpoint():
+    """HTTP JSON-RPC MCP endpoint for MCP gateway discovery."""
+    if request.method == "GET":
+        return jsonify(
+            {
+                "service": "insurance-policy-mcp-server",
+                "protocol": "mcp-json-rpc-over-http",
+                "methods": ["initialize", "tools/list"],
+            }
+        )
+
+    payload = request.json or {}
+    request_id = payload.get("id")
+    method = payload.get("method")
+
+    if method == "initialize":
+        return mcp_jsonrpc_result(
+            request_id,
+            {
+                "protocolVersion": payload.get("params", {}).get("protocolVersion", "2024-11-05"),
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "insurance-policy-mcp-server", "version": "1.0.0"},
+            },
+        )
+
+    if method == "tools/list":
+        return mcp_jsonrpc_result(
+            request_id,
+            {"tools": [mcp_tool_schema(tool) for tool in AGENT_TOOLS]},
+        )
+
+    return mcp_jsonrpc_error(request_id, -32601, f"Unsupported MCP method: {method}")
 
 
 @app.route("/api/policies", methods=["GET"])
