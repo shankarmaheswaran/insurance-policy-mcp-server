@@ -415,8 +415,9 @@ def agent_connection_check():
 
     try:
         active_headers = {"Accept": "application/json"}
-        gateway = check_mcp_gateway() if mode == "mcp_gateway" else check_mcp_gateway()
+        gateway = None
         if mode == "mcp_gateway":
+            gateway = check_mcp_gateway()
             active_headers, _, gateway_config_logs = load_gateway_headers()
             logs.extend(gateway_config_logs)
         ssl_context = None
@@ -446,7 +447,8 @@ def agent_connection_check():
                 f"[SUCCESS] Selected route MCP tool API returned {len(tools)} actions for {agent_role}"
             )
 
-        logs.extend(gateway["logs"])
+        if gateway:
+            logs.extend(gateway["logs"])
 
         logs.append(f"[COMPLETE] Connected through {route_label}")
         return jsonify(

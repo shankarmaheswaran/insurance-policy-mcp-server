@@ -80,6 +80,9 @@ function setConnectionMode(mode) {
 function updateConnectionModeDisplay() {
     document.getElementById("directModeButton").classList.toggle("active", connectionMode === "direct");
     document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
+    document.querySelectorAll(".gateway-only").forEach(element => {
+        element.classList.toggle("hidden", connectionMode !== "mcp_gateway");
+    });
 }
 
 function updateRouteModeItems() {
@@ -352,7 +355,12 @@ async function verifyConnection() {
     routeEl.textContent = data.route_label || (connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct EC2");
         ipEl.textContent = data.backend_host || "Unknown";
         urlEl.textContent = data.backend_url || "Not configured";
-        renderGatewayStatus(data.mcp_gateway || {});
+        if (connectionMode === "mcp_gateway") {
+            renderGatewayStatus(data.mcp_gateway || {});
+        } else {
+            gatewayUrlEl.textContent = "Hidden in Direct mode";
+            gatewayStatusEl.textContent = "Hidden in Direct mode";
+        }
         toolsEl.textContent = Number.isInteger(data.tool_count) ? `${data.tool_count} actions` : "Unknown";
         renderConnectionLogs(data.logs || []);
 
