@@ -5,7 +5,7 @@ EC2 backend API for the Insurance Policy MCP project.
 import json
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
 from src.store import PolicyStore
 from src.types_import import CreatePolicyInput, SubmitClaimInput
@@ -19,6 +19,7 @@ OAUTH_AUDIENCE = os.getenv("OAUTH_AUDIENCE", f"{PUBLIC_BASE_URL}/insurance-mcp/m
 OAUTH_ENFORCE = os.getenv("OAUTH_ENFORCE", "0") == "1"
 OAUTH_DEMO_BEARER_TOKEN = os.getenv("OAUTH_DEMO_BEARER_TOKEN", "")
 OAUTH_SCOPES = ["mcp:tools", "policy:read", "policy:write", "claims:read", "claims:write"]
+MCP_PROTOCOL_VERSION = os.getenv("MCP_PROTOCOL_VERSION", "2025-03-26")
 
 AGENT_TOOLS = [
     {
@@ -235,12 +236,18 @@ def mcp_tool_schema(tool: dict) -> dict:
 
 def mcp_jsonrpc_result(request_id, result: dict):
     """Return a JSON-RPC success response."""
-    return jsonify({"jsonrpc": "2.0", "id": request_id, "result": result})
+    response = jsonify({"jsonrpc": "2.0", "id": request_id, "result": result})
+    response.headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
+    response.headers["Mcp-Session-Id"] = request.headers.get("Mcp-Session-Id", "policy-mcp-demo-session")
+    return response
 
 
 def mcp_jsonrpc_error(request_id, code: int, message: str):
     """Return a JSON-RPC error response."""
-    return jsonify({"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}})
+    response = jsonify({"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}})
+    response.headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
+    response.headers["Mcp-Session-Id"] = request.headers.get("Mcp-Session-Id", "policy-mcp-demo-session")
+    return response
 
 
 def get_agent_context() -> tuple[str | None, str | None]:
@@ -384,17 +391,39 @@ def health_check():
     return jsonify({"status": "ok", "service": "policy-mcp-backend"})
 
 
-@app.route("/insurance-mcp/mcp", methods=["GET", "POST"])
+@app.route("/insurance-mcp/mcp", methods=["GET", "POST", "OPTIONS", "DELETE"])
 def http_mcp_endpoint():
-    """HTTP JSON-RPC MCP endpoint for MCP gateway discovery."""
+    """Streamable HTTP-style MCP endpoint for MCP gateway discovery."""
+    if request.method == "OPTIONS":
+        response = Response(status=204)
+        response.headers["Allow"] = "GET, POST, OPTIONS, DELETE"
+        response.headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
+        return response
+
+    if request.method == "DELETE":
+        response = jsonify({"status": "session_closed"})
+        response.headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
+        response.headers["Mcp-Session-Id"] = request.headers.get("Mcp-Session-Id", "policy-mcp-demo-session")
+        return response
+
     if request.method == "GET":
-        return jsonify(
-            {
-                "service": "insurance-policy-mcp-server",
-                "protocol": "mcp-json-rpc-over-http",
-                "methods": ["initialize", "tools/list"],
-            }
-        )
+        if "text/event-stream" in request.headers.get("Accept", ""):
+            response = Response(
+                "event: endpoint\n"
+                f"data: {json.dumps({'endpoint': '/insurance-mcp/mcp', 'protocolVersion': MCP_PROTOCOL_VERSION})}\n\n",
+                mimetype="text/event-stream",
+            )
+        else:
+            response = jsonify(
+                {
+                    "service": "insurance-policy-mcp-server",
+                    "protocol": "mcp-streamable-http",
+                    "methods": ["initialize", "tools/list"],
+                }
+            )
+        response.headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
+        response.headers["Mcp-Session-Id"] = request.headers.get("Mcp-Session-Id", "policy-mcp-demo-session")
+        return response
 
     payload = request.json or {}
     request_id = payload.get("id")

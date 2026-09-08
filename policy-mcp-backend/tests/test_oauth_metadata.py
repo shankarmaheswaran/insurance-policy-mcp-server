@@ -66,7 +66,21 @@ def test_http_mcp_endpoint_metadata() -> None:
 
     assert response.status_code == 200
     assert data["service"] == "insurance-policy-mcp-server"
+    assert data["protocol"] == "mcp-streamable-http"
+    assert response.headers["MCP-Protocol-Version"]
+    assert response.headers["Mcp-Session-Id"]
     assert "tools/list" in data["methods"]
+
+
+def test_http_mcp_endpoint_sse_get() -> None:
+    """Advertised MCP resource supports SSE-style GET for Streamable HTTP clients."""
+    client = app.test_client()
+
+    response = client.get("/insurance-mcp/mcp", headers={"Accept": "text/event-stream"})
+
+    assert response.status_code == 200
+    assert response.content_type.startswith("text/event-stream")
+    assert b"event: endpoint" in response.data
 
 
 def test_http_mcp_endpoint_tools_list() -> None:
@@ -81,5 +95,22 @@ def test_http_mcp_endpoint_tools_list() -> None:
 
     assert response.status_code == 200
     assert data["jsonrpc"] == "2.0"
+    assert response.headers["MCP-Protocol-Version"]
+    assert response.headers["Mcp-Session-Id"]
     assert data["result"]["tools"]
     assert data["result"]["tools"][0]["inputSchema"]["type"] == "object"
+
+
+def test_http_mcp_endpoint_initialize() -> None:
+    """Advertised MCP resource supports initialize JSON-RPC."""
+    client = app.test_client()
+
+    response = client.post(
+        "/insurance-mcp/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["result"]["capabilities"]["tools"] == {}
+    assert data["result"]["serverInfo"]["name"] == "insurance-policy-mcp-server"
