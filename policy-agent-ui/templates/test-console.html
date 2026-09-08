@@ -20,6 +20,38 @@
                 <a href="/" class="nav-link">← Back to Dashboard</a>
             </div>
 
+            <!-- Remote MCP Connection Verification -->
+            <section class="connection-section" id="connectionSection">
+                <div class="connection-summary">
+                    <div>
+                        <h2>Remote MCP Connection</h2>
+                        <p id="connectionMessage">Checking remote MCP backend...</p>
+                    </div>
+                    <button onclick="verifyConnection()" class="btn btn-secondary">Verify Connection</button>
+                </div>
+                <div class="connection-grid">
+                    <div class="connection-card">
+                        <div class="connection-label">Status</div>
+                        <div class="connection-value" id="connectionStatus">Checking</div>
+                    </div>
+                    <div class="connection-card">
+                        <div class="connection-label">Remote IP</div>
+                        <div class="connection-value" id="connectionIp">Pending</div>
+                    </div>
+                    <div class="connection-card">
+                        <div class="connection-label">Backend URL</div>
+                        <div class="connection-value connection-url" id="connectionUrl">Pending</div>
+                    </div>
+                    <div class="connection-card">
+                        <div class="connection-label">MCP Actions</div>
+                        <div class="connection-value" id="connectionTools">Pending</div>
+                    </div>
+                </div>
+                <div class="connection-log" id="connectionLog">
+                    <div class="connection-log-entry">Connection validation has not completed yet.</div>
+                </div>
+            </section>
+
             <!-- Tool Selector -->
             <section class="tool-selector-section">
                 <h2>Select Agent Action</h2>

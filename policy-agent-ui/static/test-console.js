@@ -6,8 +6,74 @@ let logs = [];
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
+    await verifyConnection();
     await loadTools();
 });
+
+// Verify remote MCP backend connection
+async function verifyConnection() {
+    const section = document.getElementById("connectionSection");
+    const statusEl = document.getElementById("connectionStatus");
+    const messageEl = document.getElementById("connectionMessage");
+    const ipEl = document.getElementById("connectionIp");
+    const urlEl = document.getElementById("connectionUrl");
+    const toolsEl = document.getElementById("connectionTools");
+    const logEl = document.getElementById("connectionLog");
+
+    section.className = "connection-section checking";
+    statusEl.textContent = "Checking";
+    messageEl.textContent = "Checking remote MCP backend...";
+    ipEl.textContent = "Pending";
+    urlEl.textContent = "Pending";
+    toolsEl.textContent = "Pending";
+    logEl.innerHTML = '<div class="connection-log-entry">Starting connection validation...</div>';
+
+    try {
+        const response = await fetch("/api/agent/connection");
+        const data = await response.json();
+
+        ipEl.textContent = data.backend_host || "Unknown";
+        urlEl.textContent = data.backend_url || "Not configured";
+        toolsEl.textContent = Number.isInteger(data.tool_count) ? `${data.tool_count} actions` : "Unknown";
+        renderConnectionLogs(data.logs || []);
+
+        if (data.connected) {
+            section.className = "connection-section connected";
+            statusEl.textContent = "Connected";
+            messageEl.textContent = `Connected to remote MCP backend at ${data.backend_host}`;
+            addLog(`[SUCCESS] Verified remote MCP backend: ${data.backend_url}`, "success");
+        } else {
+            section.className = "connection-section disconnected";
+            statusEl.textContent = "Disconnected";
+            messageEl.textContent = data.error || "Remote MCP backend validation failed";
+            addLog(`[ERROR] Remote MCP backend validation failed: ${data.error || "unknown error"}`, "error");
+        }
+    } catch (error) {
+        section.className = "connection-section disconnected";
+        statusEl.textContent = "Disconnected";
+        messageEl.textContent = `Connection verification failed: ${error.message}`;
+        ipEl.textContent = "Unknown";
+        urlEl.textContent = "Unavailable";
+        toolsEl.textContent = "Unavailable";
+        renderConnectionLogs([`[ERROR] ${error.message}`]);
+        addLog(`[ERROR] Connection verification failed: ${error.message}`, "error");
+    }
+}
+
+function renderConnectionLogs(connectionLogs) {
+    const logEl = document.getElementById("connectionLog");
+    if (!connectionLogs.length) {
+        logEl.innerHTML = '<div class="connection-log-entry">No validation logs returned.</div>';
+        return;
+    }
+
+    logEl.innerHTML = connectionLogs.map(log => {
+        const level = log.includes("[ERROR]") ? "error" :
+            log.includes("[SUCCESS]") || log.includes("[COMPLETE]") ? "success" :
+            log.includes("[CHECK]") ? "info" : "muted";
+        return `<div class="connection-log-entry ${level}">${log}</div>`;
+    }).join("");
+}
 
 // Load available tools
 async function loadTools() {

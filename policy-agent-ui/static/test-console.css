@@ -21,6 +21,108 @@
     color: var(--secondary-color);
 }
 
+.connection-section {
+    border: 2px solid var(--border-color);
+    border-left: 4px solid var(--warning-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    background: #fff;
+}
+
+.connection-section.connected {
+    border-left-color: var(--success-color);
+}
+
+.connection-section.disconnected {
+    border-left-color: var(--danger-color);
+}
+
+.connection-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+
+.connection-summary h2 {
+    margin-bottom: 6px;
+}
+
+.connection-summary p {
+    color: var(--text-light);
+}
+
+.connection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.connection-card {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.connection-label {
+    color: var(--text-light);
+    font-size: 0.82em;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.connection-value {
+    color: var(--text-dark);
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.95em;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.connection-section.connected #connectionStatus {
+    color: var(--success-color);
+}
+
+.connection-section.disconnected #connectionStatus {
+    color: var(--danger-color);
+}
+
+.connection-log {
+    background: #1e293b;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.88em;
+    line-height: 1.5;
+    padding: 14px;
+}
+
+.connection-log-entry {
+    padding: 3px 0;
+}
+
+.connection-log-entry.success {
+    color: #34d399;
+}
+
+.connection-log-entry.info {
+    color: #60a5fa;
+}
+
+.connection-log-entry.error {
+    color: #f87171;
+}
+
+.connection-log-entry.muted {
+    color: #cbd5e1;
+}
+
 .tool-selector-section {
     background: var(--light-bg);
     padding: 20px;
@@ -272,6 +374,10 @@
 }
 
 @media (max-width: 768px) {
+    .connection-summary {
+        flex-direction: column;
+    }
+
     .panel-header {
         flex-direction: column;
         align-items: flex-start;

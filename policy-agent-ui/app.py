@@ -8,6 +8,7 @@ requests to the backend hosted on AWS EC2.
 import json
 import os
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from flask import Flask, jsonify, render_template, request
@@ -77,6 +78,67 @@ def policy_agent():
 def health_check():
     """Health check for the local Policy Agent UI."""
     return jsonify({"status": "ok", "service": "policy-agent-ui", "backend_url": BACKEND_URL})
+
+
+@app.route("/api/agent/connection", methods=["GET"])
+def agent_connection_check():
+    """Verify that the Policy Agent UI is connected to the remote backend."""
+    missing_backend = require_backend_url()
+    if missing_backend:
+        return missing_backend
+
+    backend_host = urlparse(BACKEND_URL).hostname or BACKEND_URL
+    logs = [
+        f"[CONFIG] Local Policy Agent backend URL: {BACKEND_URL}",
+        f"[CONFIG] Remote backend host/IP: {backend_host}",
+        "[CHECK] Calling remote backend /health endpoint...",
+    ]
+
+    try:
+        with urlopen(f"{BACKEND_URL}/health", timeout=10) as health_response:
+            health = json.loads(health_response.read().decode("utf-8"))
+            logs.append(f"[SUCCESS] Remote health check returned HTTP {health_response.status}")
+
+        logs.append("[CHECK] Calling remote backend /api/agent/tools endpoint...")
+        with urlopen(f"{BACKEND_URL}/api/agent/tools", timeout=10) as tools_response:
+            tools = json.loads(tools_response.read().decode("utf-8"))
+            logs.append(
+                f"[SUCCESS] Remote MCP tool API returned {len(tools)} available actions"
+            )
+
+        logs.append("[COMPLETE] Connected to the configured remote MCP backend")
+        return jsonify(
+            {
+                "connected": True,
+                "backend_url": BACKEND_URL,
+                "backend_host": backend_host,
+                "health": health,
+                "tool_count": len(tools),
+                "logs": logs,
+            }
+        )
+    except HTTPError as error:
+        logs.append(f"[ERROR] Remote backend returned HTTP {error.code}: {error.reason}")
+        return jsonify(
+            {
+                "connected": False,
+                "backend_url": BACKEND_URL,
+                "backend_host": backend_host,
+                "logs": logs,
+                "error": error.reason,
+            }
+        ), 502
+    except URLError as error:
+        logs.append(f"[ERROR] Remote backend unavailable: {error.reason}")
+        return jsonify(
+            {
+                "connected": False,
+                "backend_url": BACKEND_URL,
+                "backend_host": backend_host,
+                "logs": logs,
+                "error": str(error.reason),
+            }
+        ), 502
 
 
 @app.route("/api/policies", methods=["GET"])
