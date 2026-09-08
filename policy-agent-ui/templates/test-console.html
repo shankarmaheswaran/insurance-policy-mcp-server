@@ -117,12 +117,23 @@
                         <button onclick="copyOutput()" class="btn btn-small">📋 Copy</button>
                     </div>
                     <div class="panel-content">
-                        <pre id="outputContent" class="output-content">
+                        <div class="output-split">
+                            <section class="output-box policy-output-box">
+                                <div class="output-box-title">Interactive Policy Details</div>
+                                <div id="policyTableContent" class="policy-table-content">
+                                    <p class="loading">Run a policy action to see table details here.</p>
+                                </div>
+                            </section>
+                            <section class="output-box raw-output-box">
+                                <div class="output-box-title">Raw MCP Server Output</div>
+                                <pre id="outputContent" class="output-content">
 {
   "result": null,
     "message": "Run the Policy Agent to see results here"
 }
-                        </pre>
+                                </pre>
+                            </section>
+                        </div>
                     </div>
                 </div>
             </div>

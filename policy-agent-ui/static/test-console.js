@@ -328,6 +328,97 @@ function displayToolDocs() {
     document.getElementById("toolDocs").innerHTML = docHTML;
 }
 
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function formatCurrency(value) {
+    const amount = Number(value || 0);
+    return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+function normalizePolicies(result) {
+    const rows = Array.isArray(result) ? result : result ? [result] : [];
+    return rows.filter(item => item && item.id && item.customer_id && item.policy_type);
+}
+
+function renderPolicyTable(result) {
+    const policies = normalizePolicies(result);
+    const container = document.getElementById("policyTableContent");
+
+    if (!policies.length) {
+        container.innerHTML = '<p class="loading">No policy table available for this MCP result. Review the raw output.</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="policy-table-toolbar">
+            <span>${policies.length} policy record${policies.length === 1 ? "" : "s"}</span>
+            <input type="search" id="policyTableFilter" placeholder="Filter policy table" oninput="filterPolicyTable()">
+        </div>
+        <div class="policy-table-wrap">
+            <table class="policy-table" id="policyTable">
+                <thead>
+                    <tr>
+                        <th>Policy ID</th>
+                        <th>Customer</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Premium</th>
+                        <th>Period</th>
+                        <th>Limit</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${policies.map((policy, index) => `
+                        <tr class="policy-row" data-policy-text="${escapeHtml(JSON.stringify(policy).toLowerCase())}">
+                            <td>${escapeHtml(policy.id)}</td>
+                            <td>${escapeHtml(policy.customer_id)}</td>
+                            <td>${escapeHtml(policy.policy_type)}</td>
+                            <td><span class="policy-status status-${escapeHtml(policy.status)}">${escapeHtml(policy.status)}</span></td>
+                            <td>${formatCurrency(policy.premium)}</td>
+                            <td>${escapeHtml(policy.start_date)} to ${escapeHtml(policy.end_date)}</td>
+                            <td>${formatCurrency(policy.policy_limit)}</td>
+                            <td><button class="btn btn-small" onclick="togglePolicyDetails(${index})">View</button></td>
+                        </tr>
+                        <tr class="policy-detail-row hidden" id="policyDetail${index}">
+                            <td colspan="8">
+                                <div class="policy-detail-grid">
+                                    <div><strong>Deductible</strong><span>${formatCurrency(policy.deductible)}</span></div>
+                                    <div><strong>Coverage Options</strong><span>${escapeHtml((policy.coverage_options || []).join(", ") || "None")}</span></div>
+                                    <div><strong>Raw Policy</strong><pre>${escapeHtml(JSON.stringify(policy, null, 2))}</pre></div>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function togglePolicyDetails(index) {
+    document.getElementById(`policyDetail${index}`).classList.toggle("hidden");
+}
+
+function filterPolicyTable() {
+    const filterText = document.getElementById("policyTableFilter").value.toLowerCase();
+    document.querySelectorAll("#policyTable .policy-row").forEach(row => {
+        const isMatch = row.dataset.policyText.includes(filterText);
+        row.classList.toggle("hidden", !isMatch);
+        const detailRow = row.nextElementSibling;
+        if (detailRow && detailRow.classList.contains("policy-detail-row") && !isMatch) {
+            detailRow.classList.add("hidden");
+        }
+    });
+}
+
 // Execute Policy Agent action
 async function executeAgent() {
     if (!currentTool) {
@@ -392,10 +483,12 @@ async function executeAgent() {
         if (data.success) {
             outputEl.textContent = JSON.stringify(data.result, null, 2);
             outputEl.className = "output-content success";
+            renderPolicyTable(data.result);
             addLog("✅ Policy Agent completed successfully", "success");
         } else {
             outputEl.textContent = JSON.stringify({ error: data.error, result: data.result }, null, 2);
             outputEl.className = "output-content error";
+            renderPolicyTable(null);
             addLog(`❌ Policy Agent failed: ${data.error}`, "error");
         }
     } catch (error) {
@@ -403,6 +496,7 @@ async function executeAgent() {
         const outputEl = document.getElementById("outputContent");
         outputEl.textContent = JSON.stringify({ error: error.message }, null, 2);
         outputEl.className = "output-content error";
+        renderPolicyTable(null);
     }
 }
 
