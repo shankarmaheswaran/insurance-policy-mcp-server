@@ -98,6 +98,9 @@ function updateConnectionModeDisplay() {
     document.querySelectorAll(".standard-agent-section").forEach(element => {
         element.classList.toggle("hidden", connectionMode === "demo_lab" || !isLoggedIn());
     });
+    document.querySelectorAll(".flow-trace-section").forEach(element => {
+        element.classList.toggle("hidden", connectionMode !== "mcp_gateway" && !isLoggedIn());
+    });
     document.querySelectorAll(".demo-lab-only").forEach(element => {
         element.classList.toggle("hidden", connectionMode !== "demo_lab" || !isLoggedIn());
     });
@@ -127,10 +130,14 @@ async function connectMcpGatewayBeforeLogin() {
     const status = document.getElementById("gatewayPreflightStatus");
     const button = document.getElementById("gatewayPreflightButton");
     gatewayPreflightConnected = false;
+    updateConnectionModeDisplay();
+    clearLogs();
     updateLoginAvailability();
     status.className = "gateway-preflight-status checking";
     status.textContent = "Connecting to MCP Gateway using YAML credentials only...";
     button.disabled = true;
+    addLog("[FLOW] Starting MCP Gateway preflight before agent login", "info");
+    addLog("[AUTH] Using YAML gateway credentials only for this step", "info");
 
     try {
         const response = await fetch("/api/agent/gateway-preflight");
