@@ -918,9 +918,19 @@
 }
 
 .lab-inline-output {
-    border-top: 1px solid #fed7aa;
-    margin-top: 14px;
-    padding-top: 12px;
+    align-self: stretch;
+    background: #f8fafc;
+    border-left: 2px solid #fed7aa;
+    grid-column: 2;
+    grid-row: 1 / span 7;
+    margin-left: 4px;
+    min-width: 0;
+    padding-left: 16px;
+}
+
+.lab-inline-output.empty p {
+    color: var(--text-light);
+    line-height: 1.45;
 }
 
 .lab-inline-title {
@@ -959,14 +969,21 @@
 .injection-tests-grid {
     display: grid;
     gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: 1fr;
 }
 
 .injection-test-card {
     background: white;
     border: 1px solid #fed7aa;
     border-radius: 8px;
+    display: grid;
+    gap: 14px 18px;
+    grid-template-columns: minmax(280px, 0.85fr) minmax(320px, 1.15fr);
     padding: 16px;
+}
+
+.injection-test-card > :not(.lab-inline-output) {
+    grid-column: 1;
 }
 
 .injection-test-card h3 {
@@ -1064,6 +1081,20 @@
     .comparison-separator {
         justify-self: center;
         writing-mode: horizontal-tb;
+    }
+
+    .injection-test-card {
+        grid-template-columns: 1fr;
+    }
+
+    .lab-inline-output {
+        border-left: 0;
+        border-top: 2px solid #fed7aa;
+        grid-column: 1;
+        grid-row: auto;
+        margin-left: 0;
+        padding-left: 0;
+        padding-top: 14px;
     }
 }
 

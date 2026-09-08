@@ -94,6 +94,23 @@ function updateConnectionModeDisplay() {
     document.querySelectorAll(".demo-lab-only").forEach(element => {
         element.classList.toggle("hidden", connectionMode !== "demo_lab" || !isLoggedIn());
     });
+    if (connectionMode === "demo_lab" && isLoggedIn()) {
+        initializeLabOutputPlaceholders();
+    }
+}
+
+function initializeLabOutputPlaceholders() {
+    document.querySelectorAll(".injection-test-card").forEach(card => {
+        if (!card.querySelector(".lab-inline-output")) {
+            const output = document.createElement("div");
+            output.className = "lab-inline-output empty";
+            output.innerHTML = `
+                <div class="lab-inline-title">Output</div>
+                <p>Run Direct, Run MCP GW, or Compare to view this scenario's result here.</p>
+            `;
+            card.appendChild(output);
+        }
+    });
 }
 
 function getConnectionModeLabel() {
@@ -593,6 +610,7 @@ function renderInlineLabOutput(title, payload, level) {
         output.className = "lab-inline-output";
         activeCard.appendChild(output);
     }
+    output.classList.remove("empty");
 
     if (payload.direct_result && payload.mcp_gateway_result) {
         output.innerHTML = renderInlineComparison(title, payload, level);
