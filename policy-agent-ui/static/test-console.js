@@ -7,8 +7,7 @@ let loginOptions = [];
 let coverageCatalog = [];
 let agentSession = {
     username: "",
-    role: "",
-    customerId: ""
+    role: ""
 };
 
 // Load tools on page load
@@ -48,9 +47,6 @@ function getAgentHeaders() {
     if (agentSession.username) {
         headers["X-Policy-Agent-Username"] = agentSession.username;
     }
-    if (agentSession.customerId) {
-        headers["X-Policy-Agent-Customer-Id"] = agentSession.customerId;
-    }
     return headers;
 }
 
@@ -60,7 +56,6 @@ function restoreAgentSession() {
     if (roleInput) {
         roleInput.checked = true;
     }
-    document.getElementById("customerScope").value = agentSession.customerId || "";
     updateRoleDisplay();
 }
 
@@ -88,18 +83,13 @@ function populateLoginSelect() {
     if (matchingLogin) {
         selector.value = matchingLogin.username;
         if (isLoggedIn() && matchingLogin.username === agentSession.username) {
-            applySelectedLogin(matchingLogin, false);
-        } else {
-            document.getElementById("customerScope").value = "";
+            applySelectedLogin(matchingLogin);
         }
     }
 }
 
 function handleLoginSelection() {
-    const selectedLogin = getSelectedLogin();
-    if (selectedLogin) {
-        document.getElementById("customerScope").value = "";
-    }
+    return getSelectedLogin();
 }
 
 function getSelectedLogin() {
@@ -110,33 +100,29 @@ function getSelectedLogin() {
 function applySelectedLogin(login) {
     agentSession.username = login.username;
     agentSession.role = login.role;
-    agentSession.customerId = "";
-    document.getElementById("customerScope").value = agentSession.customerId;
     updateRoleDisplay();
 }
 
 function loginAgent() {
     const selectedRole = document.querySelector('input[name="agentRole"]:checked').value;
     const selectedLogin = getSelectedLogin();
-    const customerId = document.getElementById("customerScope").value.trim();
 
     agentSession = {
         username: selectedLogin ? selectedLogin.username : `${selectedRole}-manual`,
-        role: selectedRole,
-        customerId: customerId
+        role: selectedRole
     };
 
     updateRoleDisplay();
     showProtectedAgentSections();
     clearLogs();
-    addLog(`[AUTH] Logged in as ${agentSession.role}${agentSession.customerId ? ` with customer scope ${agentSession.customerId}` : ""}`, "success");
+    addLog(`[AUTH] Logged in as ${agentSession.username} / ${agentSession.role}`, "success");
     verifyConnection();
     loadCoverageCatalog();
     loadTools();
 }
 
 function logoutAgent() {
-    agentSession = { username: "", role: "", customerId: "" };
+    agentSession = { username: "", role: "" };
     restoreAgentSession();
     populateLoginSelect();
     hideProtectedAgentSections();
@@ -154,9 +140,7 @@ function updateRoleDisplay() {
         document.getElementById("roleLoginSection").dataset.role = "signed-out";
         return;
     }
-    activeRole.textContent = agentSession.role === "consumer" && agentSession.customerId
-        ? `Signed in: ${agentSession.username} / consumer (${agentSession.customerId})`
-        : `Signed in: ${agentSession.username} / ${agentSession.role}`;
+    activeRole.textContent = `Signed in: ${agentSession.username} / ${agentSession.role}`;
     document.getElementById("roleLoginSection").dataset.role = agentSession.role;
 }
 

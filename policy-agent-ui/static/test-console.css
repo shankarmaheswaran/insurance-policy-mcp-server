@@ -99,7 +99,7 @@
 
 .role-login-actions {
     display: grid;
-    grid-template-columns: minmax(240px, 1.4fr) minmax(220px, 1fr) auto auto;
+    grid-template-columns: minmax(240px, 1fr) auto auto;
     gap: 12px;
     align-items: center;
 }
