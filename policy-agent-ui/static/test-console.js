@@ -12,6 +12,7 @@ let agentSession = {
     displayName: ""
 };
 let connectionMode = "direct";
+let gatewayPreflightConnected = false;
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
@@ -57,10 +58,14 @@ function getAgentHeaders() {
 
 function setConnectionMode(mode) {
     connectionMode = ["direct", "mcp_gateway", "demo_lab"].includes(mode) ? mode : "direct";
+    gatewayPreflightConnected = false;
+    agentSession = { username: "", role: "", displayName: "" };
     availableTools = [];
     currentTool = null;
     routeToolError = "";
     updateConnectionModeDisplay();
+    updateLoginAvailability();
+    updateRoleDisplay();
     updateRouteModeItems();
     document.getElementById("toolSelector").innerHTML = '<option value="">Loading route actions...</option>';
     document.getElementById("inputForm").innerHTML = "";
@@ -86,6 +91,7 @@ function updateConnectionModeDisplay() {
     document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
     document.getElementById("demoLabModeButton").classList.toggle("active", connectionMode === "demo_lab");
     document.getElementById("activeRoute").textContent = getConnectionModeLabel();
+    document.getElementById("gatewayPreflightPanel").classList.toggle("hidden", connectionMode !== "mcp_gateway");
     document.querySelectorAll(".gateway-only").forEach(element => {
         element.classList.toggle("hidden", connectionMode !== "mcp_gateway");
     });
@@ -97,6 +103,57 @@ function updateConnectionModeDisplay() {
     });
     if (connectionMode === "demo_lab" && isLoggedIn()) {
         initializeLabOutputPlaceholders();
+    }
+}
+
+function updateLoginAvailability() {
+    const loginDisabled = connectionMode === "mcp_gateway" && !gatewayPreflightConnected;
+    document.getElementById("loginSelector").disabled = loginDisabled;
+    document.getElementById("loginButton").disabled = loginDisabled;
+    document.querySelectorAll('input[name="agentRole"]').forEach(input => {
+        input.disabled = loginDisabled;
+    });
+
+    if (connectionMode === "mcp_gateway") {
+        const status = document.getElementById("gatewayPreflightStatus");
+        status.className = `gateway-preflight-status ${gatewayPreflightConnected ? "connected" : "blocked"}`;
+        status.textContent = gatewayPreflightConnected
+            ? "MCP Gateway connection established with YAML credentials. Agent login is now enabled."
+            : "Connect MCP Gateway with YAML credentials before selecting a demo login.";
+    }
+}
+
+async function connectMcpGatewayBeforeLogin() {
+    const status = document.getElementById("gatewayPreflightStatus");
+    const button = document.getElementById("gatewayPreflightButton");
+    gatewayPreflightConnected = false;
+    updateLoginAvailability();
+    status.className = "gateway-preflight-status checking";
+    status.textContent = "Connecting to MCP Gateway using YAML credentials only...";
+    button.disabled = true;
+
+    try {
+        const response = await fetch("/api/agent/gateway-preflight");
+        const data = await response.json();
+        gatewayPreflightConnected = Boolean(response.ok && data.connected);
+        status.className = `gateway-preflight-status ${gatewayPreflightConnected ? "connected" : "blocked"}`;
+        status.textContent = gatewayPreflightConnected
+            ? `Connected to ${data.gateway_url}. ${data.tool_count} gateway actions available.`
+            : `MCP Gateway connection failed: ${data.error || `HTTP ${response.status}`}`;
+        (data.logs || []).forEach(logMsg => {
+            const level = logMsg.includes("[ERROR]") ? "error" :
+                logMsg.includes("[SUCCESS]") ? "success" : "info";
+            addLog(logMsg, level);
+        });
+    } catch (error) {
+        gatewayPreflightConnected = false;
+        status.className = "gateway-preflight-status blocked";
+        status.textContent = `MCP Gateway connection failed: ${error.message}`;
+        addLog(`[ERROR] MCP Gateway preflight failed: ${error.message}`, "error");
+    } finally {
+        button.disabled = false;
+        updateLoginAvailability();
+        updateRouteModeItems();
     }
 }
 
@@ -124,7 +181,9 @@ function updateRouteModeItems() {
     const container = document.getElementById("routeModeItems");
     const routeLabel = getConnectionModeLabel();
     if (!isLoggedIn()) {
-        container.innerHTML = `${routeLabel} selected. Choose a demo login next to load the matching experience.`;
+        container.innerHTML = connectionMode === "mcp_gateway" && !gatewayPreflightConnected
+            ? `${routeLabel} selected. Connect to MCP Gateway with YAML credentials before choosing a demo login.`
+            : `${routeLabel} selected. Choose a demo login next to load the matching experience.`;
         return;
     }
 
@@ -156,6 +215,7 @@ function restoreAgentSession() {
         roleInput.checked = true;
     }
     updateConnectionModeDisplay();
+    updateLoginAvailability();
     updateRoleDisplay();
     updateRouteModeItems();
 }
@@ -208,6 +268,11 @@ function applySelectedLogin(login) {
 }
 
 function loginAgent() {
+    if (connectionMode === "mcp_gateway" && !gatewayPreflightConnected) {
+        alert("Connect MCP Gateway with YAML credentials before logging in.");
+        return;
+    }
+
     const selectedRole = document.querySelector('input[name="agentRole"]:checked').value;
     const selectedLogin = getSelectedLogin();
 

@@ -530,6 +530,35 @@ def agent_connection_check():
         ), 502
 
 
+@app.route("/api/agent/gateway-preflight", methods=["GET"])
+def agent_gateway_preflight():
+    """Establish MCP Gateway connectivity with YAML credentials before UI login."""
+    rpc_payload, status, gateway_logs = mcp_gateway_rpc("tools/list")
+    tools = normalize_mcp_tools(rpc_payload) if status < 400 else []
+    connected = status < 400
+    logs = [
+        "[FLOW] Pre-login MCP Gateway connection check",
+        "[AUTH] Using YAML gateway credentials only",
+        "[AUTH] Consumer/supervisor/admin credentials are not used for this step",
+    ]
+    logs.extend(gateway_logs)
+    logs.append(
+        f"[{'SUCCESS' if connected else 'ERROR'}] MCP Gateway preflight "
+        f"{'established' if connected else f'failed with HTTP {status}'}"
+    )
+    return jsonify(
+        {
+            "connected": connected,
+            "gateway_url": MCP_GATEWAY_URL,
+            "status_code": status,
+            "tool_count": len(tools),
+            "tools": tools,
+            "logs": logs,
+            "error": None if connected else rpc_payload.get("error", "MCP Gateway rejected request"),
+        }
+    ), 200 if connected else status
+
+
 @app.route("/api/policies", methods=["GET"])
 def get_policies():
     """Proxy policy list requests."""
