@@ -767,6 +767,22 @@
     color: #991b1b;
 }
 
+.inline-comparison-result {
+    margin-top: 10px;
+}
+
+.inline-comparison-result .comparison-column {
+    padding: 12px;
+}
+
+.inline-comparison-result .comparison-heading {
+    font-size: 0.9em;
+}
+
+.inline-comparison-result pre {
+    max-height: 260px;
+}
+
 /* Logs Content */
 .logs-content {
     background: #1e293b;

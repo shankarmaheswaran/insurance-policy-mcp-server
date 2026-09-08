@@ -573,9 +573,11 @@ async function compareLabScenario(scenario) {
         firewall_decision: gatewayResponse.blocked ? "blocked_or_rejected" : "not_blocked",
     };
 
-    document.getElementById("outputContent").textContent = JSON.stringify(comparison, null, 2);
-    document.getElementById("outputContent").className = gatewayResponse.blocked ? "output-content success" : "output-content warning";
-    renderComparisonResult(selectedScenario, directResult, gatewayResponse);
+    if (connectionMode !== "demo_lab") {
+        document.getElementById("outputContent").textContent = JSON.stringify(comparison, null, 2);
+        document.getElementById("outputContent").className = gatewayResponse.blocked ? "output-content success" : "output-content warning";
+        renderComparisonResult(selectedScenario, directResult, gatewayResponse);
+    }
     renderInlineLabOutput("Direct vs MCP Gateway comparison", comparison, gatewayResponse.blocked ? "success" : "warning");
 }
 
@@ -592,9 +594,36 @@ function renderInlineLabOutput(title, payload, level) {
         activeCard.appendChild(output);
     }
 
+    if (payload.direct_result && payload.mcp_gateway_result) {
+        output.innerHTML = renderInlineComparison(title, payload, level);
+        return;
+    }
+
     output.innerHTML = `
         <div class="lab-inline-title ${level}">${escapeHtml(title)}</div>
         <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+    `;
+}
+
+function renderInlineComparison(title, payload, level) {
+    return `
+        <div class="lab-inline-title ${level}">${escapeHtml(title)}</div>
+        <div class="comparison-result inline-comparison-result">
+            <div class="comparison-column direct-column">
+                <div class="comparison-heading">Direct Mode</div>
+                <p>Mock vulnerable path. The unsafe action succeeds in the Demo Lab simulation.</p>
+                <pre>${escapeHtml(JSON.stringify(payload.direct_result, null, 2))}</pre>
+            </div>
+            <div class="comparison-separator">VERSUS</div>
+            <div class="comparison-column gateway-column">
+                <div class="comparison-heading">MCP Gateway</div>
+                <p>Firewall path. The same scenario is sent through the Palo Alto / Portkey MCP Gateway.</p>
+                <pre>${escapeHtml(JSON.stringify(payload.mcp_gateway_result, null, 2))}</pre>
+            </div>
+        </div>
+        <div class="comparison-decision ${payload.firewall_decision === "blocked_or_rejected" ? "blocked" : "allowed"}">
+            Firewall decision: ${escapeHtml(payload.firewall_decision)}
+        </div>
     `;
 }
 
