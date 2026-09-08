@@ -44,7 +44,7 @@ function hideProtectedAgentSections() {
 
 function getAgentHeaders() {
     const headers = {
-        "X-Policy-Connection-Mode": connectionMode
+        "X-Policy-Connection-Mode": connectionMode === "demo_lab" ? "direct" : connectionMode
     };
     if (agentSession.role) {
         headers["X-Policy-Agent-Role"] = agentSession.role;
@@ -56,7 +56,7 @@ function getAgentHeaders() {
 }
 
 function setConnectionMode(mode) {
-    connectionMode = mode === "mcp_gateway" ? "mcp_gateway" : "direct";
+    connectionMode = ["direct", "mcp_gateway", "demo_lab"].includes(mode) ? mode : "direct";
     availableTools = [];
     currentTool = null;
     routeToolError = "";
@@ -65,8 +65,12 @@ function setConnectionMode(mode) {
     document.getElementById("toolSelector").innerHTML = '<option value="">Loading route actions...</option>';
     document.getElementById("inputForm").innerHTML = "";
     displayToolDocs();
-    addLog(`[ROUTE] Switched route to ${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct EC2"}`, "info");
+    addLog(`[ROUTE] Switched route to ${getConnectionModeLabel()}`, "info");
     if (isLoggedIn()) {
+        if (connectionMode === "demo_lab") {
+            coverageCatalog = [];
+            return;
+        }
         verifyConnection();
         if (connectionMode === "direct") {
             loadCoverageCatalog();
@@ -80,16 +84,34 @@ function setConnectionMode(mode) {
 function updateConnectionModeDisplay() {
     document.getElementById("directModeButton").classList.toggle("active", connectionMode === "direct");
     document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
+    document.getElementById("demoLabModeButton").classList.toggle("active", connectionMode === "demo_lab");
     document.querySelectorAll(".gateway-only").forEach(element => {
         element.classList.toggle("hidden", connectionMode !== "mcp_gateway");
     });
+    document.querySelectorAll(".standard-agent-section").forEach(element => {
+        element.classList.toggle("hidden", connectionMode === "demo_lab" || !isLoggedIn());
+    });
+    document.querySelectorAll(".demo-lab-only").forEach(element => {
+        element.classList.toggle("hidden", connectionMode !== "demo_lab" || !isLoggedIn());
+    });
+}
+
+function getConnectionModeLabel() {
+    if (connectionMode === "mcp_gateway") return "MCP Gateway";
+    if (connectionMode === "demo_lab") return "Demo Lab";
+    return "Direct EC2";
 }
 
 function updateRouteModeItems() {
     const container = document.getElementById("routeModeItems");
-    const routeLabel = connectionMode === "mcp_gateway" ? "MCP GW" : "Direct";
+    const routeLabel = getConnectionModeLabel();
     if (!isLoggedIn()) {
         container.innerHTML = "Login to load route-specific MCP actions.";
+        return;
+    }
+
+    if (connectionMode === "demo_lab") {
+        container.innerHTML = '<strong>Demo Lab items:</strong> <span class="route-item-chip">role_escalation</span><span class="route-item-chip">unauthorized_policy_edit</span><span class="route-item-chip">cross_customer_profile</span><span class="route-item-chip">supervisor_isolation</span><span class="route-item-chip">hidden_delete_tool</span><span class="route-item-chip">secret_disclosure</span><span class="route-item-chip">route_confusion</span><span class="route-item-chip">raw_output_tampering</span>';
         return;
     }
 
@@ -179,8 +201,13 @@ function loginAgent() {
 
     updateRoleDisplay();
     showProtectedAgentSections();
+    updateConnectionModeDisplay();
     clearLogs();
     addLog(`[AUTH] Logged in as ${agentSession.displayName} / ${agentSession.role}`, "success");
+    if (connectionMode === "demo_lab") {
+        updateRouteModeItems();
+        return;
+    }
     verifyConnection();
     loadCoverageCatalog();
     loadTools();
@@ -323,8 +350,8 @@ function runDevLabLoophole(scenario) {
         return;
     }
 
-    if (connectionMode !== "direct") {
-        alert("Switch to Direct mode before running Direct mode dev lab loopholes.");
+    if (!["direct", "demo_lab"].includes(connectionMode)) {
+        alert("Switch to Direct or Demo Lab mode before running Direct lab loopholes.");
         return;
     }
 
@@ -356,6 +383,7 @@ function runDevLabLoophole(scenario) {
     document.getElementById("outputContent").textContent = JSON.stringify(rawMcpOutput, null, 2);
     document.getElementById("outputContent").className = "output-content warning";
     renderDevLabResult(selectedScenario);
+    renderInlineLabOutput("Direct mock result", rawMcpOutput, "warning");
 }
 
 function getDevLabScenarios() {
@@ -511,6 +539,7 @@ async function runGatewayLabScenario(scenario) {
     document.getElementById("outputContent").textContent = JSON.stringify(gatewayResponse.raw, null, 2);
     document.getElementById("outputContent").className = gatewayResponse.blocked ? "output-content success" : "output-content warning";
     renderGatewayLabResult(selectedScenario, gatewayResponse);
+    renderInlineLabOutput("MCP Gateway result", gatewayResponse.raw, gatewayResponse.blocked ? "success" : "warning");
 }
 
 async function compareLabScenario(scenario) {
@@ -547,6 +576,26 @@ async function compareLabScenario(scenario) {
     document.getElementById("outputContent").textContent = JSON.stringify(comparison, null, 2);
     document.getElementById("outputContent").className = gatewayResponse.blocked ? "output-content success" : "output-content warning";
     renderComparisonResult(selectedScenario, directResult, gatewayResponse);
+    renderInlineLabOutput("Direct vs MCP Gateway comparison", comparison, gatewayResponse.blocked ? "success" : "warning");
+}
+
+function renderInlineLabOutput(title, payload, level) {
+    const activeCard = document.activeElement.closest(".injection-test-card");
+    if (!activeCard) {
+        return;
+    }
+
+    let output = activeCard.querySelector(".lab-inline-output");
+    if (!output) {
+        output = document.createElement("div");
+        output.className = "lab-inline-output";
+        activeCard.appendChild(output);
+    }
+
+    output.innerHTML = `
+        <div class="lab-inline-title ${level}">${escapeHtml(title)}</div>
+        <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+    `;
 }
 
 async function executeScenarioThroughGateway(scenario) {

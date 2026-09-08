@@ -53,6 +53,7 @@
                     <div class="route-toggle" role="group" aria-label="MCP route mode">
                         <button type="button" id="directModeButton" class="route-toggle-button active" onclick="setConnectionMode('direct')">Direct</button>
                         <button type="button" id="gatewayModeButton" class="route-toggle-button" onclick="setConnectionMode('mcp_gateway')">MCP GW</button>
+                        <button type="button" id="demoLabModeButton" class="route-toggle-button" onclick="setConnectionMode('demo_lab')">Demo Lab</button>
                     </div>
                     <button onclick="loginAgent()" class="btn btn-primary">Login to Policy Agent</button>
                     <button onclick="showPersonalInfoInOutput()" class="btn btn-secondary agent-protected hidden">Personal Information</button>
@@ -64,7 +65,7 @@
             </section>
 
             <!-- Remote MCP Connection Verification -->
-            <section class="connection-section agent-protected hidden" id="connectionSection">
+            <section class="connection-section agent-protected standard-agent-section hidden" id="connectionSection">
                 <div class="connection-summary">
                     <div>
                         <h2>Remote MCP Connection</h2>
@@ -108,7 +109,7 @@
             </section>
 
             <!-- Tool Selector -->
-            <section class="tool-selector-section agent-protected hidden">
+            <section class="tool-selector-section agent-protected standard-agent-section hidden">
                 <h2>Select Agent Action</h2>
                 <select id="toolSelector" class="input-field" onchange="loadToolSchema()">
                     <option value="">-- Select an agent action --</option>
@@ -116,7 +117,7 @@
             </section>
 
             <!-- Main Agent Area -->
-            <div class="test-area agent-protected hidden">
+            <div class="test-area agent-protected standard-agent-section hidden">
                 <!-- Single Input Dialog -->
                 <div class="panel input-panel">
                     <div class="panel-header">
@@ -158,7 +159,7 @@
             </div>
 
             <!-- Logs Panel (Full Width) -->
-            <div class="panel logs-panel agent-protected hidden">
+            <div class="panel logs-panel agent-protected standard-agent-section hidden">
                 <div class="panel-header">
                     <h3>Background Trace</h3>
                     <button onclick="clearLogs()" class="btn btn-small">🗑️ Clear</button>
@@ -171,7 +172,7 @@
             </div>
 
             <!-- Tool Documentation -->
-            <section class="tool-docs-section agent-protected hidden">
+            <section class="tool-docs-section agent-protected standard-agent-section hidden">
                 <h2>Available MCP Actions for This Login</h2>
                 <div id="toolDocs" class="tool-docs">
                     <p class="loading">Login to view available MCP actions.</p>
@@ -179,7 +180,7 @@
             </section>
 
             <!-- Direct Mode Loophole Validation -->
-            <section class="injection-tests-section agent-protected hidden">
+            <section class="injection-tests-section agent-protected demo-lab-only hidden">
                 <h2>Direct Mode Dev Lab Loopholes</h2>
                 <p class="injection-tests-note">
                     These runnable lab actions intentionally simulate insecure behavior against mock data only. They do not weaken the real EC2 backend, reveal real credentials, or delete system resources.

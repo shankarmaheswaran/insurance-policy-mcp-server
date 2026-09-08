@@ -4,6 +4,11 @@
     display: none !important;
 }
 
+.dashboard {
+    display: flex;
+    flex-direction: column;
+}
+
 .nav-links {
     margin-bottom: 20px;
     padding-bottom: 15px;
@@ -26,6 +31,7 @@
 }
 
 .role-login-section {
+    order: 1;
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--primary-color);
     border-radius: 8px;
@@ -109,7 +115,7 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     display: inline-grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     overflow: hidden;
 }
 
@@ -192,6 +198,7 @@
 }
 
 .connection-section {
+    order: 3;
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--warning-color);
     border-radius: 8px;
@@ -306,6 +313,7 @@
 }
 
 .tool-selector-section {
+    order: 4;
     background: var(--light-bg);
     padding: 20px;
     border-radius: 8px;
@@ -324,6 +332,7 @@
 
 /* Test Area Layout */
 .test-area {
+    order: 5;
     display: grid;
     grid-template-columns: 1fr;
     gap: 22px;
@@ -575,6 +584,7 @@
 }
 
 .logs-panel {
+    order: 6;
     grid-column: 1 / -1;
     border-left: 4px solid #f59e0b;
     max-height: 400px;
@@ -725,6 +735,7 @@
 
 /* Tool Docs */
 .tool-docs-section {
+    order: 7;
     background: var(--light-bg);
     padding: 25px;
     border-radius: 8px;
@@ -803,11 +814,39 @@
 }
 
 .injection-tests-section {
+    order: 2;
     background: #fff7ed;
     border: 1px solid #fed7aa;
     border-radius: 8px;
     margin-top: 25px;
     padding: 25px;
+}
+
+.lab-inline-output {
+    border-top: 1px solid #fed7aa;
+    margin-top: 14px;
+    padding-top: 12px;
+}
+
+.lab-inline-title {
+    border-radius: 6px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+}
+
+.lab-inline-title.success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.lab-inline-title.warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.lab-inline-output pre {
+    max-height: 260px;
 }
 
 .injection-tests-section h2 {
