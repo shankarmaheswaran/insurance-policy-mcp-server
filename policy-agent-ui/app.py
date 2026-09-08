@@ -7,6 +7,7 @@ requests to the backend hosted on AWS EC2.
 
 import json
 import os
+import ssl
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -15,6 +16,10 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 BACKEND_URL = os.getenv("POLICY_BACKEND_URL", "").rstrip("/")
+MCP_GATEWAY_URL = os.getenv("MCP_GATEWAY_URL", "https://mcp-aigw.portkey.ai").rstrip("/")
+MCP_GATEWAY_CONFIG_FILE = os.getenv("MCP_GATEWAY_CONFIG_FILE", "")
+MCP_GATEWAY_TEST_PATH = os.getenv("MCP_GATEWAY_TEST_PATH", "/")
+MCP_GATEWAY_VERIFY_SSL = os.getenv("MCP_GATEWAY_VERIFY_SSL", "1") != "0"
 
 
 def require_backend_url():
@@ -26,6 +31,127 @@ def require_backend_url():
             "error": "POLICY_BACKEND_URL is not configured. Set it to your EC2 backend URL."
         }
     ), 500
+
+
+def load_gateway_headers() -> tuple[dict[str, str], list[str], list[str]]:
+    """Load MCP gateway headers from env/YAML without exposing secret values."""
+    headers: dict[str, str] = {"Accept": "application/json"}
+    header_names: list[str] = []
+    logs: list[str] = []
+
+    headers_json = os.getenv("MCP_GATEWAY_HEADERS_JSON")
+    if headers_json:
+        try:
+            parsed_headers = json.loads(headers_json)
+            for name, value in parsed_headers.items():
+                if value:
+                    headers[str(name)] = str(value)
+                    header_names.append(str(name))
+            logs.append("[CONFIG] Loaded MCP gateway headers from MCP_GATEWAY_HEADERS_JSON")
+        except json.JSONDecodeError:
+            logs.append("[WARNING] MCP_GATEWAY_HEADERS_JSON is not valid JSON")
+
+    auth_name = os.getenv("MCP_GATEWAY_AUTH_HEADER_NAME")
+    auth_value = os.getenv("MCP_GATEWAY_AUTH_HEADER_VALUE")
+    if auth_name and auth_value:
+        headers[auth_name] = auth_value
+        header_names.append(auth_name)
+        logs.append("[CONFIG] Loaded MCP gateway auth header from environment")
+
+    if MCP_GATEWAY_CONFIG_FILE:
+        try:
+            import yaml
+        except ImportError:
+            logs.append("[WARNING] PyYAML is not installed; YAML gateway config was not loaded")
+        else:
+            try:
+                with open(MCP_GATEWAY_CONFIG_FILE, "r", encoding="utf-8") as config_file:
+                    config = yaml.safe_load(config_file) or {}
+                yaml_headers = config.get("headers", {}) if isinstance(config, dict) else {}
+                if isinstance(yaml_headers, dict):
+                    for name, value in yaml_headers.items():
+                        if value:
+                            headers[str(name)] = str(value)
+                            header_names.append(str(name))
+                for key in ("api_key", "portkey_api_key", "virtual_key", "bearer_token"):
+                    value = config.get(key) if isinstance(config, dict) else None
+                    if value and key not in header_names:
+                        header_name = "Authorization" if key == "bearer_token" else f"X-{key.replace('_', '-')}"
+                        header_value = f"Bearer {value}" if key == "bearer_token" else str(value)
+                        headers[header_name] = header_value
+                        header_names.append(header_name)
+                environment_data = config.get("environment", {}).get("data", {}) if isinstance(config, dict) else {}
+                client_auth = environment_data.get("PORTKEY_CLIENT_AUTH") if isinstance(environment_data, dict) else None
+                if client_auth:
+                    auth_header_name = os.getenv("MCP_GATEWAY_YAML_AUTH_HEADER", "Authorization")
+                    auth_header_value = (
+                        str(client_auth)
+                        if auth_header_name.lower() != "authorization"
+                        else f"Bearer {client_auth}"
+                    )
+                    headers[auth_header_name] = auth_header_value
+                    header_names.append(auth_header_name)
+                logs.append("[CONFIG] Loaded MCP gateway YAML config file")
+            except OSError as error:
+                logs.append(f"[WARNING] Could not read MCP gateway YAML config file: {error.strerror}")
+
+    return headers, sorted(set(header_names)), logs
+
+
+def check_mcp_gateway() -> dict:
+    """Check the configured MCP gateway URL without logging secrets."""
+    gateway_url = f"{MCP_GATEWAY_URL}{MCP_GATEWAY_TEST_PATH}"
+    gateway_host = urlparse(MCP_GATEWAY_URL).hostname or MCP_GATEWAY_URL
+    headers, header_names, logs = load_gateway_headers()
+    logs.insert(0, f"[CONFIG] MCP Gateway URL: {MCP_GATEWAY_URL}")
+    logs.append(f"[CONFIG] MCP Gateway host: {gateway_host}")
+    logs.append(f"[CONFIG] Credential headers configured: {', '.join(header_names) if header_names else 'none'}")
+    logs.append(f"[CONFIG] TLS certificate verification: {'enabled' if MCP_GATEWAY_VERIFY_SSL else 'disabled for local test'}")
+    logs.append(f"[CHECK] Calling MCP gateway test endpoint: {gateway_url}")
+
+    try:
+        gateway_request = Request(gateway_url, headers=headers, method="GET")
+        ssl_context = None if MCP_GATEWAY_VERIFY_SSL else ssl._create_unverified_context()
+        with urlopen(gateway_request, timeout=15, context=ssl_context) as response:
+            logs.append(f"[SUCCESS] MCP gateway returned HTTP {response.status}")
+            return {
+                "configured": True,
+                "connected": 200 <= response.status < 300,
+                "reachable": True,
+                "url": MCP_GATEWAY_URL,
+                "host": gateway_host,
+                "status_code": response.status,
+                "headers_configured": bool(header_names),
+                "header_names": header_names,
+                "logs": logs,
+            }
+    except HTTPError as error:
+        logs.append(f"[WARNING] MCP gateway reached but returned HTTP {error.code}: {error.reason}")
+        return {
+            "configured": True,
+            "connected": False,
+            "reachable": True,
+            "url": MCP_GATEWAY_URL,
+            "host": gateway_host,
+            "status_code": error.code,
+            "headers_configured": bool(header_names),
+            "header_names": header_names,
+            "logs": logs,
+            "error": error.reason,
+        }
+    except URLError as error:
+        logs.append(f"[ERROR] MCP gateway unavailable: {error.reason}")
+        return {
+            "configured": True,
+            "connected": False,
+            "reachable": False,
+            "url": MCP_GATEWAY_URL,
+            "host": gateway_host,
+            "headers_configured": bool(header_names),
+            "header_names": header_names,
+            "logs": logs,
+            "error": str(error.reason),
+        }
 
 
 def backend_request(path: str, method: str = "GET", payload: dict | None = None):
@@ -86,7 +212,14 @@ def policy_agent():
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check for the local Policy Agent UI."""
-    return jsonify({"status": "ok", "service": "policy-agent-ui", "backend_url": BACKEND_URL})
+    return jsonify(
+        {
+            "status": "ok",
+            "service": "policy-agent-ui",
+            "backend_url": BACKEND_URL,
+            "mcp_gateway_url": MCP_GATEWAY_URL,
+        }
+    )
 
 
 @app.route("/api/agent/connection", methods=["GET"])
@@ -135,12 +268,16 @@ def agent_connection_check():
                 f"[SUCCESS] Remote MCP tool API returned {len(tools)} actions for {agent_role}"
             )
 
+        gateway = check_mcp_gateway()
+        logs.extend(gateway["logs"])
+
         logs.append("[COMPLETE] Connected to the configured remote MCP backend")
         return jsonify(
             {
                 "connected": True,
                 "backend_url": BACKEND_URL,
                 "backend_host": backend_host,
+                "mcp_gateway": gateway,
                 "health": health,
                 "tool_count": len(tools),
                 "role": agent_role,

@@ -211,6 +211,18 @@
     color: var(--danger-color);
 }
 
+.gateway-connected {
+    color: var(--success-color);
+}
+
+.gateway-warning {
+    color: var(--warning-color);
+}
+
+.gateway-error {
+    color: var(--danger-color);
+}
+
 .connection-log {
     background: #1e293b;
     border-radius: 6px;

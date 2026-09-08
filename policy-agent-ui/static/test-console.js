@@ -267,6 +267,8 @@ async function verifyConnection() {
     const messageEl = document.getElementById("connectionMessage");
     const ipEl = document.getElementById("connectionIp");
     const urlEl = document.getElementById("connectionUrl");
+    const gatewayUrlEl = document.getElementById("gatewayUrl");
+    const gatewayStatusEl = document.getElementById("gatewayStatus");
     const toolsEl = document.getElementById("connectionTools");
     const logEl = document.getElementById("connectionLog");
 
@@ -275,6 +277,8 @@ async function verifyConnection() {
     messageEl.textContent = "Checking remote MCP backend...";
     ipEl.textContent = "Pending";
     urlEl.textContent = "Pending";
+    gatewayUrlEl.textContent = "Pending";
+    gatewayStatusEl.textContent = "Pending";
     toolsEl.textContent = "Pending";
     logEl.innerHTML = '<div class="connection-log-entry">Starting connection validation...</div>';
 
@@ -286,6 +290,7 @@ async function verifyConnection() {
 
         ipEl.textContent = data.backend_host || "Unknown";
         urlEl.textContent = data.backend_url || "Not configured";
+        renderGatewayStatus(data.mcp_gateway || {});
         toolsEl.textContent = Number.isInteger(data.tool_count) ? `${data.tool_count} actions` : "Unknown";
         renderConnectionLogs(data.logs || []);
 
@@ -306,9 +311,28 @@ async function verifyConnection() {
         messageEl.textContent = `Connection verification failed: ${error.message}`;
         ipEl.textContent = "Unknown";
         urlEl.textContent = "Unavailable";
+        gatewayUrlEl.textContent = "Unavailable";
+        gatewayStatusEl.textContent = "Unavailable";
         toolsEl.textContent = "Unavailable";
         renderConnectionLogs([`[ERROR] ${error.message}`]);
         addLog(`[ERROR] Connection verification failed: ${error.message}`, "error");
+    }
+}
+
+function renderGatewayStatus(gateway) {
+    const gatewayUrlEl = document.getElementById("gatewayUrl");
+    const gatewayStatusEl = document.getElementById("gatewayStatus");
+    gatewayUrlEl.textContent = gateway.url || "Not configured";
+
+    if (gateway.connected) {
+        gatewayStatusEl.textContent = `Connected HTTP ${gateway.status_code}`;
+        gatewayStatusEl.className = "connection-value gateway-connected";
+    } else if (gateway.reachable) {
+        gatewayStatusEl.textContent = `Reached HTTP ${gateway.status_code}`;
+        gatewayStatusEl.className = "connection-value gateway-warning";
+    } else {
+        gatewayStatusEl.textContent = gateway.error ? `Unavailable: ${gateway.error}` : "Unavailable";
+        gatewayStatusEl.className = "connection-value gateway-error";
     }
 }
 
