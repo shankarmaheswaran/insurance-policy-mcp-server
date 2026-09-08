@@ -643,6 +643,41 @@
     border-left: 4px solid var(--danger-color);
 }
 
+.output-content.warning {
+    border-left: 4px solid var(--warning-color);
+}
+
+.dev-lab-result-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.dev-lab-result-grid div {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.dev-lab-result-grid strong {
+    color: var(--text-light);
+    display: block;
+    font-size: 0.78em;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.dev-lab-result-grid pre {
+    background: #1e293b;
+    border-radius: 6px;
+    color: #e2e8f0;
+    margin: 0;
+    overflow-x: auto;
+    padding: 10px;
+    white-space: pre-wrap;
+}
+
 /* Logs Content */
 .logs-content {
     background: #1e293b;
