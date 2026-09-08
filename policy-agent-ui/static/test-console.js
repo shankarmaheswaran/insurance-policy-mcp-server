@@ -3,12 +3,73 @@
 let availableTools = [];
 let currentTool = null;
 let logs = [];
+let agentSession = {
+    role: localStorage.getItem("policyAgentRole") || "consumer",
+    customerId: localStorage.getItem("policyAgentCustomerId") || "CUST-001"
+};
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
+    restoreAgentSession();
     await verifyConnection();
     await loadTools();
 });
+
+function getAgentHeaders() {
+    const headers = {
+        "X-Policy-Agent-Role": agentSession.role
+    };
+    if (agentSession.customerId) {
+        headers["X-Policy-Agent-Customer-Id"] = agentSession.customerId;
+    }
+    return headers;
+}
+
+function restoreAgentSession() {
+    const roleInput = document.querySelector(`input[name="agentRole"][value="${agentSession.role}"]`);
+    if (roleInput) {
+        roleInput.checked = true;
+    }
+    document.getElementById("customerScope").value = agentSession.customerId;
+    updateRoleDisplay();
+}
+
+function loginAgent() {
+    const selectedRole = document.querySelector('input[name="agentRole"]:checked').value;
+    const customerId = document.getElementById("customerScope").value.trim();
+
+    agentSession = {
+        role: selectedRole,
+        customerId: selectedRole === "consumer" ? customerId : customerId
+    };
+    localStorage.setItem("policyAgentRole", agentSession.role);
+    localStorage.setItem("policyAgentCustomerId", agentSession.customerId);
+
+    updateRoleDisplay();
+    clearLogs();
+    addLog(`[AUTH] Logged in as ${agentSession.role}${agentSession.customerId ? ` with customer scope ${agentSession.customerId}` : ""}`, "success");
+    verifyConnection();
+    loadTools();
+}
+
+function logoutAgent() {
+    localStorage.removeItem("policyAgentRole");
+    localStorage.removeItem("policyAgentCustomerId");
+    agentSession = { role: "consumer", customerId: "CUST-001" };
+    restoreAgentSession();
+    clearLogs();
+    addLog("[AUTH] Logged out. Defaulted to consumer role.", "info");
+    verifyConnection();
+    loadTools();
+}
+
+function updateRoleDisplay() {
+    const activeRole = document.getElementById("activeRole");
+    activeRole.textContent = agentSession.role === "consumer" && agentSession.customerId
+        ? `Signed in: consumer (${agentSession.customerId})`
+        : `Signed in: ${agentSession.role}`;
+    document.getElementById("roleLoginSection").dataset.role = agentSession.role;
+}
 
 // Verify remote MCP backend connection
 async function verifyConnection() {
@@ -29,7 +90,9 @@ async function verifyConnection() {
     logEl.innerHTML = '<div class="connection-log-entry">Starting connection validation...</div>';
 
     try {
-        const response = await fetch("/api/agent/connection");
+        const response = await fetch("/api/agent/connection", {
+            headers: getAgentHeaders()
+        });
         const data = await response.json();
 
         ipEl.textContent = data.backend_host || "Unknown";
@@ -78,7 +141,9 @@ function renderConnectionLogs(connectionLogs) {
 // Load available tools
 async function loadTools() {
     try {
-        const response = await fetch("/api/agent/tools");
+        const response = await fetch("/api/agent/tools", {
+            headers: getAgentHeaders()
+        });
         availableTools = await response.json();
 
         const selector = document.getElementById("toolSelector");
@@ -90,7 +155,7 @@ async function loadTools() {
             selector.appendChild(option);
         });
 
-        addLog("✓ Tools loaded successfully", "success");
+        addLog(`✓ Tools loaded successfully for ${agentSession.role}`, "success");
     } catch (error) {
         addLog(`✗ Error loading tools: ${error.message}`, "error");
     }
@@ -204,7 +269,7 @@ async function executeAgent() {
     try {
         const response = await fetch("/api/agent/execute", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...getAgentHeaders() },
             body: JSON.stringify({
                 tool_name: currentTool.name,
                 params: params

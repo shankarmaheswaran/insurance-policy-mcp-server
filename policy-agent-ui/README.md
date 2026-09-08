@@ -16,6 +16,16 @@ Open:
 - Dashboard: `http://127.0.0.1:5000/`
 - Policy Agent: `http://127.0.0.1:5000/agent`
 
+## Agent Roles
+
+The Policy Agent login supports three demo roles:
+
+- `consumer`: can view policies and claims for the selected customer scope, view coverage options, and submit claims for owned policies.
+- `supervisor`: can review policies, claims, and coverage options across customers, and submit claims.
+- `admin`: has full access, including creating new policies.
+
+The selected role and customer scope are sent to the EC2 backend on every Policy Agent request.
+
 ## Validate
 
 ```bash

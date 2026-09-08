@@ -41,6 +41,12 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
 
     body = None
     headers = {"Accept": "application/json"}
+    agent_role = request.headers.get("X-Policy-Agent-Role")
+    agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
+    if agent_role:
+        headers["X-Policy-Agent-Role"] = agent_role
+    if agent_customer_id:
+        headers["X-Policy-Agent-Customer-Id"] = agent_customer_id
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -88,11 +94,16 @@ def agent_connection_check():
         return missing_backend
 
     backend_host = urlparse(BACKEND_URL).hostname or BACKEND_URL
+    agent_role = request.headers.get("X-Policy-Agent-Role", "consumer")
+    agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
     logs = [
         f"[CONFIG] Local Policy Agent backend URL: {BACKEND_URL}",
         f"[CONFIG] Remote backend host/IP: {backend_host}",
+        f"[AUTH] Agent role: {agent_role}",
         "[CHECK] Calling remote backend /health endpoint...",
     ]
+    if agent_customer_id:
+        logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
 
     try:
         with urlopen(f"{BACKEND_URL}/health", timeout=10) as health_response:
@@ -100,10 +111,18 @@ def agent_connection_check():
             logs.append(f"[SUCCESS] Remote health check returned HTTP {health_response.status}")
 
         logs.append("[CHECK] Calling remote backend /api/agent/tools endpoint...")
-        with urlopen(f"{BACKEND_URL}/api/agent/tools", timeout=10) as tools_response:
+        tools_request = Request(
+            f"{BACKEND_URL}/api/agent/tools",
+            headers={
+                "Accept": "application/json",
+                "X-Policy-Agent-Role": agent_role,
+                "X-Policy-Agent-Customer-Id": agent_customer_id or "",
+            },
+        )
+        with urlopen(tools_request, timeout=10) as tools_response:
             tools = json.loads(tools_response.read().decode("utf-8"))
             logs.append(
-                f"[SUCCESS] Remote MCP tool API returned {len(tools)} available actions"
+                f"[SUCCESS] Remote MCP tool API returned {len(tools)} actions for {agent_role}"
             )
 
         logs.append("[COMPLETE] Connected to the configured remote MCP backend")
@@ -114,6 +133,8 @@ def agent_connection_check():
                 "backend_host": backend_host,
                 "health": health,
                 "tool_count": len(tools),
+                "role": agent_role,
+                "customer_id": agent_customer_id,
                 "logs": logs,
             }
         )

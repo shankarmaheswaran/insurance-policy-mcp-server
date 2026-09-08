@@ -21,6 +21,85 @@
     color: var(--secondary-color);
 }
 
+.role-login-section {
+    border: 2px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    background: white;
+}
+
+.role-login-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+
+.role-login-header h2 {
+    margin-bottom: 6px;
+}
+
+.role-login-header p {
+    color: var(--text-light);
+}
+
+.active-role {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--primary-color);
+    font-weight: 700;
+    padding: 8px 12px;
+    white-space: nowrap;
+}
+
+.role-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.role-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    display: grid;
+    gap: 6px;
+    padding: 14px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.role-card:has(input:checked) {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.role-card input {
+    margin-bottom: 4px;
+}
+
+.role-title {
+    color: var(--text-dark);
+    font-weight: 800;
+}
+
+.role-description {
+    color: var(--text-light);
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.role-login-actions {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    gap: 12px;
+    align-items: center;
+}
+
 .connection-section {
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--warning-color);
@@ -374,8 +453,13 @@
 }
 
 @media (max-width: 768px) {
+    .role-login-header,
     .connection-summary {
         flex-direction: column;
+    }
+
+    .role-login-actions {
+        grid-template-columns: 1fr;
     }
 
     .panel-header {

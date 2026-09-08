@@ -23,6 +23,19 @@ curl http://127.0.0.1:5000/api/policies
 python3 -m pytest tests/ -q
 ```
 
+## Policy Agent Roles
+
+The backend enforces role-based access for `/api/agent/tools` and `/api/agent/execute` using headers from the laptop Policy Agent UI:
+
+- `X-Policy-Agent-Role`: `consumer`, `supervisor`, or `admin`
+- `X-Policy-Agent-Customer-Id`: customer scope used by consumer access
+
+Role access:
+
+- `consumer`: own policy/claim access and claim submission for owned policies.
+- `supervisor`: review access across customers and claim submission.
+- `admin`: full access, including policy creation.
+
 ## Run MCP stdio Server
 
 ```bash

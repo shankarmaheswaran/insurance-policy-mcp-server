@@ -13,6 +13,86 @@ from src.types_import import CreatePolicyInput, SubmitClaimInput
 app = Flask(__name__)
 store = PolicyStore()
 
+AGENT_TOOLS = [
+    {
+        "name": "create_policy",
+        "description": "Create a new insurance policy",
+        "allowed_roles": ["admin"],
+        "params": {
+            "customer_id": "string",
+            "policy_type": "auto|home|health|life",
+            "start_date": "YYYY-MM-DD",
+            "end_date": "YYYY-MM-DD",
+            "premium": "number",
+            "deductible": "number",
+            "policy_limit": "number",
+            "coverage_options": "array of strings",
+        },
+    },
+    {
+        "name": "get_policy",
+        "description": "Get a specific policy",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {"policy_id": "string"},
+    },
+    {
+        "name": "list_policies",
+        "description": "List policies visible to the signed-in role",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {"customer_id": "string (optional)"},
+    },
+    {
+        "name": "get_coverage_options",
+        "description": "Get available coverage options",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {"policy_type": "string (optional)"},
+    },
+    {
+        "name": "submit_claim",
+        "description": "Submit a claim",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {
+            "policy_id": "string",
+            "claim_type": "string",
+            "amount": "number",
+            "description": "string",
+        },
+    },
+    {
+        "name": "list_claims",
+        "description": "List claims visible to the signed-in role",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {"policy_id": "string (optional)"},
+    },
+]
+
+ROLE_PERMISSIONS = {
+    "consumer": {"get_policy", "list_policies", "get_coverage_options", "submit_claim", "list_claims"},
+    "supervisor": {"get_policy", "list_policies", "get_coverage_options", "submit_claim", "list_claims"},
+    "admin": {tool["name"] for tool in AGENT_TOOLS},
+}
+
+
+def get_agent_context() -> tuple[str, str | None]:
+    """Read the role context sent by the laptop Policy Agent UI."""
+    role = request.headers.get("X-Policy-Agent-Role", "consumer").lower()
+    customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
+    if role not in ROLE_PERMISSIONS:
+        role = "consumer"
+    return role, customer_id
+
+
+def get_tools_for_role(role: str) -> list[dict]:
+    """Return only the MCP actions available to a role."""
+    allowed_tools = ROLE_PERMISSIONS.get(role, ROLE_PERMISSIONS["consumer"])
+    return [tool for tool in AGENT_TOOLS if tool["name"] in allowed_tools]
+
+
+def error_result(message: str, logs: list[str], status_code: int = 403):
+    """Return a consistent Policy Agent error response."""
+    logs.append(f"[ERROR] {message}")
+    return jsonify({"success": False, "result": None, "logs": logs, "error": message}), status_code
+
 
 @app.route("/health", methods=["GET"])
 def health_check():
@@ -112,12 +192,19 @@ def agent_execute_tool():
     """Execute a Policy Agent action."""
     logs: list[str] = []
     try:
+        role, customer_id = get_agent_context()
         data = request.json or {}
         tool_name = data.get("tool_name")
         tool_params = data.get("params", {})
 
         logs = [f"[REQUEST] Tool: {tool_name}"]
+        logs.append(f"[AUTH] Role: {role}")
+        if customer_id:
+            logs.append(f"[AUTH] Customer scope: {customer_id}")
         logs.append(f"[PARAMS] {json.dumps(tool_params, indent=2)}")
+
+        if tool_name not in ROLE_PERMISSIONS[role]:
+            return error_result(f"Role '{role}' is not allowed to run '{tool_name}'", logs)
 
         result = None
         if tool_name == "create_policy":
@@ -140,6 +227,8 @@ def agent_execute_tool():
             logs.append("[EXECUTING] Retrieving policy...")
             policy = store.get_policy(tool_params["policy_id"])
             if policy:
+                if role == "consumer" and policy.customer_id != customer_id:
+                    return error_result("Consumer role can only access its own policies", logs)
                 result = policy.__dict__
                 logs.append("[SUCCESS] Policy found")
             else:
@@ -147,7 +236,15 @@ def agent_execute_tool():
 
         elif tool_name == "list_policies":
             logs.append("[EXECUTING] Listing policies...")
-            policies = store.list_policies(tool_params.get("customer_id"))
+            filter_customer_id = tool_params.get("customer_id")
+            if role == "consumer":
+                if not customer_id:
+                    return error_result("Consumer role requires a customer ID scope", logs)
+                if filter_customer_id and filter_customer_id != customer_id:
+                    return error_result("Consumer role cannot list another customer's policies", logs)
+                filter_customer_id = customer_id
+                logs.append(f"[AUTH] Consumer policy list scoped to {customer_id}")
+            policies = store.list_policies(filter_customer_id)
             result = [policy.__dict__ for policy in policies]
             logs.append(f"[SUCCESS] Found {len(policies)} policies")
 
@@ -159,6 +256,11 @@ def agent_execute_tool():
 
         elif tool_name == "submit_claim":
             logs.append("[EXECUTING] Submitting claim...")
+            policy = store.get_policy(tool_params["policy_id"])
+            if not policy:
+                return error_result(f"Policy not found: {tool_params['policy_id']}", logs, 404)
+            if role == "consumer" and policy.customer_id != customer_id:
+                return error_result("Consumer role can only submit claims for its own policies", logs)
             input_data = SubmitClaimInput(
                 policy_id=tool_params["policy_id"],
                 claim_type=tool_params["claim_type"],
@@ -171,7 +273,23 @@ def agent_execute_tool():
 
         elif tool_name == "list_claims":
             logs.append("[EXECUTING] Listing claims...")
-            claims = store.list_claims(tool_params.get("policy_id"))
+            filter_policy_id = tool_params.get("policy_id")
+            if role == "consumer":
+                if not customer_id:
+                    return error_result("Consumer role requires a customer ID scope", logs)
+                allowed_policy_ids = {
+                    policy.id for policy in store.list_policies(customer_id)
+                }
+                if filter_policy_id and filter_policy_id not in allowed_policy_ids:
+                    return error_result("Consumer role cannot list claims for another policy", logs)
+                claims = [
+                    claim
+                    for claim in store.list_claims(filter_policy_id)
+                    if claim.policy_id in allowed_policy_ids
+                ]
+                logs.append(f"[AUTH] Consumer claims list scoped to {customer_id}")
+            else:
+                claims = store.list_claims(filter_policy_id)
             result = [claim.__dict__ for claim in claims]
             logs.append(f"[SUCCESS] Found {len(claims)} claims")
 
@@ -197,54 +315,8 @@ def agent_execute_tool():
 @app.route("/api/agent/tools", methods=["GET"])
 def agent_get_tools():
     """Get available Policy Agent actions."""
-    return jsonify(
-        [
-            {
-                "name": "create_policy",
-                "description": "Create a new insurance policy",
-                "params": {
-                    "customer_id": "string",
-                    "policy_type": "auto|home|health|life",
-                    "start_date": "YYYY-MM-DD",
-                    "end_date": "YYYY-MM-DD",
-                    "premium": "number",
-                    "deductible": "number",
-                    "policy_limit": "number",
-                    "coverage_options": "array of strings",
-                },
-            },
-            {
-                "name": "get_policy",
-                "description": "Get a specific policy",
-                "params": {"policy_id": "string"},
-            },
-            {
-                "name": "list_policies",
-                "description": "List all policies",
-                "params": {"customer_id": "string (optional)"},
-            },
-            {
-                "name": "get_coverage_options",
-                "description": "Get available coverage options",
-                "params": {"policy_type": "string (optional)"},
-            },
-            {
-                "name": "submit_claim",
-                "description": "Submit a claim",
-                "params": {
-                    "policy_id": "string",
-                    "claim_type": "string",
-                    "amount": "number",
-                    "description": "string",
-                },
-            },
-            {
-                "name": "list_claims",
-                "description": "List all claims",
-                "params": {"policy_id": "string (optional)"},
-            },
-        ]
-    )
+    role, _ = get_agent_context()
+    return jsonify(get_tools_for_role(role))
 
 
 if __name__ == "__main__":
