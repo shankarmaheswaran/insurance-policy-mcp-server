@@ -67,6 +67,21 @@ class AgentLogin:
 
 
 @dataclass
+class AgentPersonalInfo:
+    """Fictional personal profile for demo agent users"""
+    username: str
+    role: Literal["consumer", "supervisor", "admin"]
+    name: str
+    phone_number: str
+    address: str
+    ssn: str
+    passport_number: str
+    annual_income: float
+    family_members: int
+    customer_id: str | None = None
+
+
+@dataclass
 class CreatePolicyInput:
     """Input for creating a new policy"""
     customer_id: str

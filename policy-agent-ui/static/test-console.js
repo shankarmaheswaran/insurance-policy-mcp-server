@@ -134,6 +134,7 @@ function logoutAgent() {
     document.getElementById("toolSelector").innerHTML = '<option value="">-- Login required --</option>';
     document.getElementById("inputForm").innerHTML = "";
     document.getElementById("outputContent").textContent = JSON.stringify({ result: null, message: "Login required" }, null, 2);
+    closePersonalInfoDialog();
 }
 
 function updateRoleDisplay() {
@@ -145,6 +146,94 @@ function updateRoleDisplay() {
     }
     activeRole.textContent = `Signed in: ${agentSession.displayName} / ${agentSession.role}`;
     document.getElementById("roleLoginSection").dataset.role = agentSession.role;
+}
+
+async function openPersonalInfoDialog() {
+    if (!isLoggedIn()) {
+        alert("Please login before viewing personal information.");
+        return;
+    }
+
+    const dialog = document.getElementById("personalInfoDialog");
+    const content = document.getElementById("personalInfoContent");
+    const notice = document.getElementById("personalInfoNotice");
+
+    dialog.classList.remove("hidden");
+    content.innerHTML = '<p class="loading">Loading personal information from remote MCP backend...</p>';
+    notice.textContent = "Mock sensitive data for demo validation only.";
+
+    try {
+        const response = await fetch("/api/agent/personal-info", {
+            headers: getAgentHeaders()
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            content.innerHTML = `<p class="loading">${escapeHtml(data.error || "Unable to load personal information")}</p>`;
+            return;
+        }
+
+        notice.textContent = data.mock_data_notice || "All sensitive data values are fake demo identifiers.";
+        content.innerHTML = `
+            ${renderPersonalInfoSection("Consumers", data.consumers || [])}
+            ${renderPersonalInfoSection("Supervisors", data.supervisors || [])}
+        `;
+        addLog(`[PII] Loaded mock personal information for ${agentSession.displayName}`, "success");
+    } catch (error) {
+        content.innerHTML = `<p class="loading">${escapeHtml(error.message)}</p>`;
+        addLog(`[ERROR] Personal information dialog failed: ${error.message}`, "error");
+    }
+}
+
+function closePersonalInfoDialog() {
+    document.getElementById("personalInfoDialog").classList.add("hidden");
+}
+
+function renderPersonalInfoSection(title, profiles) {
+    if (!profiles.length) {
+        return `
+            <section class="personal-info-section">
+                <h3>${escapeHtml(title)}</h3>
+                <p class="loading">No ${escapeHtml(title.toLowerCase())} records visible for this role.</p>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="personal-info-section">
+            <h3>${escapeHtml(title)} (${profiles.length})</h3>
+            <div class="personal-info-table-wrap">
+                <table class="personal-info-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>User</th>
+                            <th>Phone</th>
+                            <th>Address</th>
+                            <th>Mock SSN</th>
+                            <th>Mock Passport</th>
+                            <th>Income</th>
+                            <th>Family</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${profiles.map(profile => `
+                            <tr>
+                                <td>${escapeHtml(profile.name)}</td>
+                                <td>${escapeHtml(profile.username)}</td>
+                                <td>${escapeHtml(profile.phone_number)}</td>
+                                <td>${escapeHtml(profile.address)}</td>
+                                <td><span class="mock-sensitive">${escapeHtml(profile.ssn)}</span></td>
+                                <td><span class="mock-sensitive">${escapeHtml(profile.passport_number)}</span></td>
+                                <td>${formatCurrency(profile.annual_income)}</td>
+                                <td>${escapeHtml(profile.family_members)}</td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    `;
 }
 
 // Verify remote MCP backend connection

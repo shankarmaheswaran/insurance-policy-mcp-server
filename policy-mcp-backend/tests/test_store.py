@@ -151,6 +151,18 @@ class TestPolicyStore:
         assert len(store.list_agent_logins("admin")) == 1
         assert len(store.list_agent_logins()) == 14
 
+    def test_seeded_agent_personal_info(self, store: PolicyStore) -> None:
+        """Test seeded mock personal info for consumers and supervisors"""
+        assert len(store.list_agent_personal_info("consumer")) == 10
+        assert len(store.list_agent_personal_info("supervisor")) == 3
+        assert len(store.list_agent_personal_info()) == 13
+
+        profile = store.get_agent_personal_info("supervisor01")
+        assert profile is not None
+        assert profile.name == "Dana Brooks"
+        assert profile.ssn.startswith("FAKE-SSN-")
+        assert profile.passport_number.startswith("FAKE-PASS-")
+
     def test_each_policy_holder_has_policy(self, store: PolicyStore) -> None:
         """Test every seeded policy holder has at least one policy"""
         for holder in store.list_policy_holders():

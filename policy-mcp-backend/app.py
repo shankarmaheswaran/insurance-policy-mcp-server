@@ -184,6 +184,22 @@ def serialize_public_login(login) -> dict:
     }
 
 
+def serialize_personal_info(profile) -> dict:
+    """Serialize mock personal information for demo UI responses."""
+    return {
+        "username": profile.username,
+        "role": profile.role,
+        "name": profile.name,
+        "phone_number": profile.phone_number,
+        "address": profile.address,
+        "ssn": profile.ssn,
+        "passport_number": profile.passport_number,
+        "annual_income": profile.annual_income,
+        "family_members": profile.family_members,
+        "customer_id": profile.customer_id,
+    }
+
+
 def error_result(message: str, logs: list[str], status_code: int = 403):
     """Return a consistent Policy Agent error response."""
     logs.append(f"[ERROR] {message}")
@@ -506,6 +522,39 @@ def agent_get_logins():
     """Get demo Policy Agent login accounts for the UI."""
     role = request.args.get("role")
     return jsonify([serialize_public_login(login) for login in store.list_agent_logins(role)])
+
+
+@app.route("/api/agent/personal-info", methods=["GET"])
+def agent_get_personal_info():
+    """Get mock personal information visible to the signed-in role."""
+    role, _ = get_agent_context()
+    username = request.headers.get("X-Policy-Agent-Username")
+    if role is None or not username:
+        return jsonify({"error": "Login is required before viewing personal information"}), 401
+
+    if role == "consumer":
+        profile = store.get_agent_personal_info(username)
+        return jsonify(
+            {
+                "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
+                "consumers": [serialize_personal_info(profile)] if profile else [],
+                "supervisors": [],
+            }
+        )
+
+    return jsonify(
+        {
+            "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
+            "consumers": [
+                serialize_personal_info(profile)
+                for profile in store.list_agent_personal_info("consumer")
+            ],
+            "supervisors": [
+                serialize_personal_info(profile)
+                for profile in store.list_agent_personal_info("supervisor")
+            ],
+        }
+    )
 
 
 if __name__ == "__main__":

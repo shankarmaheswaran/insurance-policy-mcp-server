@@ -234,6 +234,12 @@ def agent_get_logins():
     return backend_request("/api/agent/logins")
 
 
+@app.route("/api/agent/personal-info", methods=["GET"])
+def agent_get_personal_info():
+    """Proxy role-scoped mock personal information requests."""
+    return backend_request("/api/agent/personal-info")
+
+
 if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "5000"))

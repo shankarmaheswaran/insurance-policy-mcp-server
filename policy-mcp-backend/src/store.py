@@ -7,6 +7,7 @@ from datetime import datetime
 try:
     from .types_import import (
         AgentLogin,
+        AgentPersonalInfo,
         Claim,
         CoverageOption,
         CreatePolicyInput,
@@ -17,6 +18,7 @@ try:
 except ImportError:
     from types_import import (
         AgentLogin,
+        AgentPersonalInfo,
         Claim,
         CoverageOption,
         CreatePolicyInput,
@@ -35,6 +37,7 @@ class PolicyStore:
         self.coverage_options: dict[str, CoverageOption] = {}
         self.policy_holders: dict[str, PolicyHolder] = {}
         self.agent_logins: dict[str, AgentLogin] = {}
+        self.agent_personal_info: dict[str, AgentPersonalInfo] = {}
         self.policy_id_counter = 1000
         self.claim_id_counter = 5000
         self._initialize_sample_data()
@@ -72,6 +75,30 @@ class PolicyStore:
 
         for login in agent_logins:
             self.agent_logins[login.username] = login
+
+        for index, holder in enumerate(policy_holders, start=1):
+            username = f"consumer{index:02d}"
+            self.agent_personal_info[username] = AgentPersonalInfo(
+                username=username,
+                role="consumer",
+                name=holder.name,
+                phone_number=holder.phone_number,
+                address=holder.address,
+                ssn=holder.ssn,
+                passport_number=holder.passport_number,
+                annual_income=holder.annual_income,
+                family_members=holder.family_members,
+                customer_id=holder.customer_id,
+            )
+
+        supervisor_profiles = [
+            AgentPersonalInfo("supervisor01", "supervisor", "Dana Brooks", "555-0201", "700 Capitol Mall, Sacramento, CA 95814", "FAKE-SSN-2001", "FAKE-PASS-S2001", 118000, 3),
+            AgentPersonalInfo("supervisor02", "supervisor", "Riley Foster", "555-0202", "455 Market Street, San Francisco, CA 94105", "FAKE-SSN-2002", "FAKE-PASS-S2002", 122500, 2),
+            AgentPersonalInfo("supervisor03", "supervisor", "Casey Nguyen", "555-0203", "88 Civic Center Plaza, Santa Ana, CA 92701", "FAKE-SSN-2003", "FAKE-PASS-S2003", 115000, 4),
+        ]
+
+        for profile in supervisor_profiles:
+            self.agent_personal_info[profile.username] = profile
 
         # Sample coverage options
         coverage_options = [
@@ -225,6 +252,17 @@ class PolicyStore:
         if role:
             logins = [login for login in logins if login.role == role]
         return sorted(logins, key=lambda login: login.username)
+
+    def get_agent_personal_info(self, username: str) -> AgentPersonalInfo | None:
+        """Get mock personal info for a demo agent user"""
+        return self.agent_personal_info.get(username)
+
+    def list_agent_personal_info(self, role: str | None = None) -> list[AgentPersonalInfo]:
+        """List mock personal info profiles, optionally filtered by role"""
+        profiles = list(self.agent_personal_info.values())
+        if role:
+            profiles = [profile for profile in profiles if profile.role == role]
+        return sorted(profiles, key=lambda profile: profile.username)
 
     def list_policies(self, customer_id: str | None = None) -> list[Policy]:
         """List all policies, optionally filtered by customer, in reverse chronological order"""
