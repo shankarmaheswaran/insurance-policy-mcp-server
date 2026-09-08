@@ -542,6 +542,19 @@ def agent_get_personal_info():
             }
         )
 
+    if role == "supervisor":
+        profile = store.get_agent_personal_info(username)
+        return jsonify(
+            {
+                "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
+                "consumers": [
+                    serialize_personal_info(profile)
+                    for profile in store.list_agent_personal_info("consumer")
+                ],
+                "supervisors": [serialize_personal_info(profile)] if profile else [],
+            }
+        )
+
     return jsonify(
         {
             "mock_data_notice": "All SSN and passport values are fake demo identifiers.",
