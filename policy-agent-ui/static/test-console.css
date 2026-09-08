@@ -99,9 +99,32 @@
 
 .role-login-actions {
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) auto auto;
+    grid-template-columns: minmax(240px, 1fr) auto auto auto auto;
     gap: 12px;
     align-items: center;
+}
+
+.route-toggle {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: inline-grid;
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+}
+
+.route-toggle-button {
+    background: transparent;
+    border: 0;
+    color: var(--text-light);
+    cursor: pointer;
+    font-weight: 800;
+    padding: 10px 14px;
+}
+
+.route-toggle-button.active {
+    background: var(--primary-color);
+    color: white;
 }
 
 .personal-info-section {

@@ -15,7 +15,7 @@ To also validate a Palo Alto / Portkey MCP AI Gateway from the agent connection 
 
 ```bash
 POLICY_BACKEND_URL=http://<ec2-public-ip-or-dns>:5000 \
-MCP_GATEWAY_URL=https://mcp-aigw.portkey.ai \
+MCP_GATEWAY_URL=https://mcp-aigw.portkey.ai/insurance-mcp/mcp \
 MCP_GATEWAY_CONFIG_FILE=/path/to/gateway-creds.yaml \
 python3 app.py
 ```

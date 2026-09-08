@@ -10,6 +10,7 @@ let agentSession = {
     role: "",
     displayName: ""
 };
+let connectionMode = "direct";
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
@@ -41,7 +42,9 @@ function hideProtectedAgentSections() {
 }
 
 function getAgentHeaders() {
-    const headers = {};
+    const headers = {
+        "X-Policy-Connection-Mode": connectionMode
+    };
     if (agentSession.role) {
         headers["X-Policy-Agent-Role"] = agentSession.role;
     }
@@ -51,18 +54,37 @@ function getAgentHeaders() {
     return headers;
 }
 
+function setConnectionMode(mode) {
+    connectionMode = mode === "mcp_gateway" ? "mcp_gateway" : "direct";
+    updateConnectionModeDisplay();
+    addLog(`[ROUTE] Switched route to ${connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct EC2"}`, "info");
+    if (isLoggedIn()) {
+        verifyConnection();
+        loadCoverageCatalog();
+        loadTools();
+    }
+}
+
+function updateConnectionModeDisplay() {
+    document.getElementById("directModeButton").classList.toggle("active", connectionMode === "direct");
+    document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
+}
+
 function restoreAgentSession() {
     const roleValue = agentSession.role || "consumer";
     const roleInput = document.querySelector(`input[name="agentRole"][value="${roleValue}"]`);
     if (roleInput) {
         roleInput.checked = true;
     }
+    updateConnectionModeDisplay();
     updateRoleDisplay();
 }
 
 async function loadLoginOptions() {
     try {
-        const response = await fetch("/api/agent/logins");
+        const response = await fetch("/api/agent/logins", {
+            headers: getAgentHeaders()
+        });
         loginOptions = await response.json();
         populateLoginSelect();
         addLog(`✓ Loaded ${loginOptions.length} demo login accounts from remote MCP backend`, "success");
@@ -267,6 +289,7 @@ async function verifyConnection() {
     const messageEl = document.getElementById("connectionMessage");
     const ipEl = document.getElementById("connectionIp");
     const urlEl = document.getElementById("connectionUrl");
+    const routeEl = document.getElementById("connectionRoute");
     const gatewayUrlEl = document.getElementById("gatewayUrl");
     const gatewayStatusEl = document.getElementById("gatewayStatus");
     const toolsEl = document.getElementById("connectionTools");
@@ -275,6 +298,7 @@ async function verifyConnection() {
     section.className = "connection-section checking";
     statusEl.textContent = "Checking";
     messageEl.textContent = "Checking remote MCP backend...";
+    routeEl.textContent = "Pending";
     ipEl.textContent = "Pending";
     urlEl.textContent = "Pending";
     gatewayUrlEl.textContent = "Pending";
@@ -288,6 +312,7 @@ async function verifyConnection() {
         });
         const data = await response.json();
 
+    routeEl.textContent = data.route_label || (connectionMode === "mcp_gateway" ? "MCP Gateway" : "Direct EC2");
         ipEl.textContent = data.backend_host || "Unknown";
         urlEl.textContent = data.backend_url || "Not configured";
         renderGatewayStatus(data.mcp_gateway || {});
@@ -297,8 +322,8 @@ async function verifyConnection() {
         if (data.connected) {
             section.className = "connection-section connected";
             statusEl.textContent = "Connected";
-            messageEl.textContent = `Connected to remote MCP backend at ${data.backend_host}`;
-            addLog(`[SUCCESS] Verified remote MCP backend: ${data.backend_url}`, "success");
+            messageEl.textContent = `Connected through ${routeEl.textContent} at ${data.backend_host}`;
+            addLog(`[SUCCESS] Verified ${routeEl.textContent}: ${data.backend_url}`, "success");
         } else {
             section.className = "connection-section disconnected";
             statusEl.textContent = "Disconnected";
@@ -309,6 +334,7 @@ async function verifyConnection() {
         section.className = "connection-section disconnected";
         statusEl.textContent = "Disconnected";
         messageEl.textContent = `Connection verification failed: ${error.message}`;
+        routeEl.textContent = "Unavailable";
         ipEl.textContent = "Unknown";
         urlEl.textContent = "Unavailable";
         gatewayUrlEl.textContent = "Unavailable";

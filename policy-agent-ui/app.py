@@ -16,7 +16,9 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 BACKEND_URL = os.getenv("POLICY_BACKEND_URL", "").rstrip("/")
-MCP_GATEWAY_URL = os.getenv("MCP_GATEWAY_URL", "https://mcp-aigw.portkey.ai").rstrip("/")
+MCP_GATEWAY_URL = os.getenv(
+    "MCP_GATEWAY_URL", "https://mcp-aigw.portkey.ai/insurance-mcp/mcp"
+).rstrip("/")
 MCP_GATEWAY_CONFIG_FILE = os.getenv("MCP_GATEWAY_CONFIG_FILE", "")
 MCP_GATEWAY_TEST_PATH = os.getenv("MCP_GATEWAY_TEST_PATH", "/")
 MCP_GATEWAY_VERIFY_SSL = os.getenv("MCP_GATEWAY_VERIFY_SSL", "1") != "0"
@@ -31,6 +33,26 @@ def require_backend_url():
             "error": "POLICY_BACKEND_URL is not configured. Set it to your EC2 backend URL."
         }
     ), 500
+
+
+def get_connection_mode() -> str:
+    """Return the selected backend route mode from the agent UI."""
+    mode = request.headers.get("X-Policy-Connection-Mode", "direct").lower()
+    return "mcp_gateway" if mode == "mcp_gateway" else "direct"
+
+
+def get_target_url() -> tuple[str, str]:
+    """Return selected route mode and base URL."""
+    mode = get_connection_mode()
+    return mode, MCP_GATEWAY_URL if mode == "mcp_gateway" else BACKEND_URL
+
+
+def require_target_url(base_url: str, mode: str):
+    """Return an error response if the selected route is not configured."""
+    if base_url:
+        return None
+    setting_name = "MCP_GATEWAY_URL" if mode == "mcp_gateway" else "POLICY_BACKEND_URL"
+    return jsonify({"error": f"{setting_name} is not configured for {mode} mode."}), 500
 
 
 def load_gateway_headers() -> tuple[dict[str, str], list[str], list[str]]:
@@ -155,18 +177,22 @@ def check_mcp_gateway() -> dict:
 
 
 def backend_request(path: str, method: str = "GET", payload: dict | None = None):
-    """Forward an API request to the EC2 backend."""
-    missing_backend = require_backend_url()
-    if missing_backend:
-        return missing_backend
+    """Forward an API request through the selected Direct or MCP Gateway route."""
+    mode, base_url = get_target_url()
+    missing_target = require_target_url(base_url, mode)
+    if missing_target:
+        return missing_target
 
     query_string = request.query_string.decode("utf-8")
-    url = f"{BACKEND_URL}{path}"
+    url = f"{base_url}{path}"
     if query_string:
         url = f"{url}?{query_string}"
 
     body = None
     headers = {"Accept": "application/json"}
+    gateway_logs: list[str] = []
+    if mode == "mcp_gateway":
+        headers, _, gateway_logs = load_gateway_headers()
     agent_role = request.headers.get("X-Policy-Agent-Role")
     agent_username = request.headers.get("X-Policy-Agent-Username")
     agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
@@ -182,7 +208,10 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
 
     try:
         outbound_request = Request(url, data=body, headers=headers, method=method)
-        with urlopen(outbound_request, timeout=15) as response:
+        ssl_context = None
+        if mode == "mcp_gateway" and not MCP_GATEWAY_VERIFY_SSL:
+            ssl_context = ssl._create_unverified_context()
+        with urlopen(outbound_request, timeout=15, context=ssl_context) as response:
             response_body = json.loads(response.read().decode("utf-8"))
             return jsonify(response_body), response.status
     except HTTPError as error:
@@ -191,9 +220,21 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
             response_body = json.loads(error_body)
         except json.JSONDecodeError:
             response_body = {"error": error_body or error.reason}
+        if mode == "mcp_gateway" and isinstance(response_body, dict):
+            response_body.setdefault("route_mode", mode)
+            response_body.setdefault("route_url", base_url)
+            response_body.setdefault("gateway_logs", gateway_logs)
         return jsonify(response_body), error.code
     except URLError as error:
-        return jsonify({"error": f"Backend unavailable: {error.reason}"}), 502
+        route_name = "MCP gateway" if mode == "mcp_gateway" else "Backend"
+        return jsonify(
+            {
+                "error": f"{route_name} unavailable: {error.reason}",
+                "route_mode": mode,
+                "route_url": base_url,
+                "gateway_logs": gateway_logs,
+            }
+        ), 502
 
 
 @app.route("/")
@@ -224,23 +265,26 @@ def health_check():
 
 @app.route("/api/agent/connection", methods=["GET"])
 def agent_connection_check():
-    """Verify that the Policy Agent UI is connected to the remote backend."""
+    """Verify that the Policy Agent UI is connected through the selected route."""
     agent_role = request.headers.get("X-Policy-Agent-Role")
     agent_username = request.headers.get("X-Policy-Agent-Username")
     if not agent_role or not agent_username:
         return jsonify({"error": "Login is required before viewing MCP connection details"}), 401
 
-    missing_backend = require_backend_url()
-    if missing_backend:
-        return missing_backend
+    mode, base_url = get_target_url()
+    missing_target = require_target_url(base_url, mode)
+    if missing_target:
+        return missing_target
 
-    backend_host = urlparse(BACKEND_URL).hostname or BACKEND_URL
+    backend_host = urlparse(base_url).hostname or base_url
     agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
+    route_label = "MCP Gateway" if mode == "mcp_gateway" else "Direct EC2"
     logs = [
-        f"[CONFIG] Local Policy Agent backend URL: {BACKEND_URL}",
-        f"[CONFIG] Remote backend host/IP: {backend_host}",
+        f"[CONFIG] Selected route: {route_label}",
+        f"[CONFIG] Selected route URL: {base_url}",
+        f"[CONFIG] Selected route host/IP: {backend_host}",
         f"[AUTH] Agent role: {agent_role}",
-        "[CHECK] Calling remote backend /health endpoint...",
+        "[CHECK] Calling selected route /health endpoint...",
     ]
     if agent_username:
         logs.append(f"[AUTH] Agent login: {agent_username}")
@@ -248,34 +292,47 @@ def agent_connection_check():
         logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
 
     try:
-        with urlopen(f"{BACKEND_URL}/health", timeout=10) as health_response:
-            health = json.loads(health_response.read().decode("utf-8"))
-            logs.append(f"[SUCCESS] Remote health check returned HTTP {health_response.status}")
+        active_headers = {"Accept": "application/json"}
+        gateway = check_mcp_gateway() if mode == "mcp_gateway" else check_mcp_gateway()
+        if mode == "mcp_gateway":
+            active_headers, _, gateway_config_logs = load_gateway_headers()
+            logs.extend(gateway_config_logs)
+        ssl_context = None
+        if mode == "mcp_gateway" and not MCP_GATEWAY_VERIFY_SSL:
+            ssl_context = ssl._create_unverified_context()
 
-        logs.append("[CHECK] Calling remote backend /api/agent/tools endpoint...")
-        tools_request = Request(
-            f"{BACKEND_URL}/api/agent/tools",
-            headers={
-                "Accept": "application/json",
+        health_request = Request(f"{base_url}/health", headers=active_headers)
+        with urlopen(health_request, timeout=10, context=ssl_context) as health_response:
+            health = json.loads(health_response.read().decode("utf-8"))
+            logs.append(f"[SUCCESS] Selected route health check returned HTTP {health_response.status}")
+
+        logs.append("[CHECK] Calling selected route /api/agent/tools endpoint...")
+        active_headers.update(
+            {
                 "X-Policy-Agent-Role": agent_role,
                 "X-Policy-Agent-Username": agent_username or "",
                 "X-Policy-Agent-Customer-Id": agent_customer_id or "",
-            },
+            }
         )
-        with urlopen(tools_request, timeout=10) as tools_response:
+        tools_request = Request(
+            f"{base_url}/api/agent/tools",
+            headers=active_headers,
+        )
+        with urlopen(tools_request, timeout=10, context=ssl_context) as tools_response:
             tools = json.loads(tools_response.read().decode("utf-8"))
             logs.append(
-                f"[SUCCESS] Remote MCP tool API returned {len(tools)} actions for {agent_role}"
+                f"[SUCCESS] Selected route MCP tool API returned {len(tools)} actions for {agent_role}"
             )
 
-        gateway = check_mcp_gateway()
         logs.extend(gateway["logs"])
 
-        logs.append("[COMPLETE] Connected to the configured remote MCP backend")
+        logs.append(f"[COMPLETE] Connected through {route_label}")
         return jsonify(
             {
                 "connected": True,
-                "backend_url": BACKEND_URL,
+                "route_mode": mode,
+                "route_label": route_label,
+                "backend_url": base_url,
                 "backend_host": backend_host,
                 "mcp_gateway": gateway,
                 "health": health,
@@ -290,7 +347,9 @@ def agent_connection_check():
         return jsonify(
             {
                 "connected": False,
-                "backend_url": BACKEND_URL,
+                "route_mode": mode,
+                "route_label": route_label,
+                "backend_url": base_url,
                 "backend_host": backend_host,
                 "logs": logs,
                 "error": error.reason,
@@ -301,7 +360,9 @@ def agent_connection_check():
         return jsonify(
             {
                 "connected": False,
-                "backend_url": BACKEND_URL,
+                "route_mode": mode,
+                "route_label": route_label,
+                "backend_url": base_url,
                 "backend_host": backend_host,
                 "logs": logs,
                 "error": str(error.reason),
