@@ -337,6 +337,17 @@
     overflow-x: auto;
 }
 
+.pii-notice {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    color: #9a3412;
+    font-size: 0.86em;
+    font-weight: 800;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+}
+
 .policy-table {
     border-collapse: collapse;
     font-size: 0.9em;
@@ -386,6 +397,18 @@
 .policy-status.status-cancelled {
     background: #fee2e2;
     color: #991b1b;
+}
+
+.mock-sensitive {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: 5px;
+    color: #991b1b;
+    display: inline-block;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.86em;
+    font-weight: 800;
+    padding: 4px 6px;
 }
 
 .policy-detail-row td {

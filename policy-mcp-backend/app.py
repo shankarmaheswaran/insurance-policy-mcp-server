@@ -177,7 +177,11 @@ def serialize_login(login) -> dict:
 
 def serialize_public_login(login) -> dict:
     """Serialize non-sensitive login choices for the signed-out UI."""
-    return {"username": login.username, "role": login.role}
+    return {
+        "username": login.username,
+        "role": login.role,
+        "display_name": login.display_name,
+    }
 
 
 def error_result(message: str, logs: list[str], status_code: int = 403):

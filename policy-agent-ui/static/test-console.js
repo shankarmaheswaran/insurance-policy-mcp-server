@@ -7,7 +7,8 @@ let loginOptions = [];
 let coverageCatalog = [];
 let agentSession = {
     username: "",
-    role: ""
+    role: "",
+    displayName: ""
 };
 
 // Load tools on page load
@@ -76,7 +77,7 @@ function populateLoginSelect() {
     const roleLogins = loginOptions.filter(login => login.role === selectedRole);
 
     selector.innerHTML = roleLogins.map(login => {
-        return `<option value="${login.username}">${login.username}</option>`;
+        return `<option value="${login.username}">${escapeHtml(login.display_name)} (${login.username})</option>`;
     }).join("");
 
     const matchingLogin = roleLogins.find(login => login.username === agentSession.username) || roleLogins[0];
@@ -100,6 +101,7 @@ function getSelectedLogin() {
 function applySelectedLogin(login) {
     agentSession.username = login.username;
     agentSession.role = login.role;
+    agentSession.displayName = login.display_name || login.username;
     updateRoleDisplay();
 }
 
@@ -109,20 +111,21 @@ function loginAgent() {
 
     agentSession = {
         username: selectedLogin ? selectedLogin.username : `${selectedRole}-manual`,
-        role: selectedRole
+        role: selectedRole,
+        displayName: selectedLogin ? selectedLogin.display_name : `${selectedRole} demo user`
     };
 
     updateRoleDisplay();
     showProtectedAgentSections();
     clearLogs();
-    addLog(`[AUTH] Logged in as ${agentSession.username} / ${agentSession.role}`, "success");
+    addLog(`[AUTH] Logged in as ${agentSession.displayName} / ${agentSession.role}`, "success");
     verifyConnection();
     loadCoverageCatalog();
     loadTools();
 }
 
 function logoutAgent() {
-    agentSession = { username: "", role: "" };
+    agentSession = { username: "", role: "", displayName: "" };
     restoreAgentSession();
     populateLoginSelect();
     hideProtectedAgentSections();
@@ -140,7 +143,7 @@ function updateRoleDisplay() {
         document.getElementById("roleLoginSection").dataset.role = "signed-out";
         return;
     }
-    activeRole.textContent = `Signed in: ${agentSession.username} / ${agentSession.role}`;
+    activeRole.textContent = `Signed in: ${agentSession.displayName} / ${agentSession.role}`;
     document.getElementById("roleLoginSection").dataset.role = agentSession.role;
 }
 
@@ -346,6 +349,11 @@ function normalizePolicies(result) {
     return rows.filter(item => item && item.id && item.customer_id && item.policy_type);
 }
 
+function normalizePolicyHolders(result) {
+    const rows = Array.isArray(result) ? result : result ? [result] : [];
+    return rows.filter(item => item && item.customer_id && item.name && item.ssn && item.passport_number);
+}
+
 function getCoverageDetails(coverageIds) {
     const selectedCoverage = coverageIds || [];
     if (!selectedCoverage.length) {
@@ -375,10 +383,16 @@ function getCoverageDetails(coverageIds) {
 
 function renderPolicyTable(result) {
     const policies = normalizePolicies(result);
+    const holders = normalizePolicyHolders(result);
     const container = document.getElementById("policyTableContent");
 
+    if (holders.length) {
+        renderPolicyHolderTable(holders, container);
+        return;
+    }
+
     if (!policies.length) {
-        container.innerHTML = '<p class="loading">No policy table available for this MCP result. Review the raw output.</p>';
+        container.innerHTML = '<p class="loading">No policy or policy holder table available for this MCP result. Review the raw output.</p>';
         return;
     }
 
@@ -421,6 +435,48 @@ function renderPolicyTable(result) {
                                     <div><strong>Raw Policy</strong><pre>${escapeHtml(JSON.stringify(policy, null, 2))}</pre></div>
                                 </div>
                             </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderPolicyHolderTable(holders, container) {
+    container.innerHTML = `
+        <div class="pii-notice">
+            MOCK SENSITIVE DATA: SSN and passport values are intentionally fake demo identifiers.
+        </div>
+        <div class="policy-table-toolbar">
+            <span>${holders.length} policy holder record${holders.length === 1 ? "" : "s"}</span>
+            <input type="search" id="policyTableFilter" placeholder="Filter holder table" oninput="filterPolicyTable()">
+        </div>
+        <div class="policy-table-wrap">
+            <table class="policy-table" id="policyTable">
+                <thead>
+                    <tr>
+                        <th>Customer ID</th>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Address</th>
+                        <th>Mock SSN</th>
+                        <th>Mock Passport</th>
+                        <th>Income</th>
+                        <th>Family</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${holders.map(holder => `
+                        <tr class="policy-row" data-policy-text="${escapeHtml(JSON.stringify(holder).toLowerCase())}">
+                            <td>${escapeHtml(holder.customer_id)}</td>
+                            <td>${escapeHtml(holder.name)}</td>
+                            <td>${escapeHtml(holder.phone_number)}</td>
+                            <td>${escapeHtml(holder.address)}</td>
+                            <td><span class="mock-sensitive">${escapeHtml(holder.ssn)}</span></td>
+                            <td><span class="mock-sensitive">${escapeHtml(holder.passport_number)}</span></td>
+                            <td>${formatCurrency(holder.annual_income)}</td>
+                            <td>${escapeHtml(holder.family_members)}</td>
                         </tr>
                     `).join("")}
                 </tbody>
