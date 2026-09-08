@@ -134,7 +134,6 @@ function logoutAgent() {
     document.getElementById("toolSelector").innerHTML = '<option value="">-- Login required --</option>';
     document.getElementById("inputForm").innerHTML = "";
     document.getElementById("outputContent").textContent = JSON.stringify({ result: null, message: "Login required" }, null, 2);
-    closePersonalInfoDialog();
 }
 
 function updateRoleDisplay() {
@@ -148,21 +147,20 @@ function updateRoleDisplay() {
     document.getElementById("roleLoginSection").dataset.role = agentSession.role;
 }
 
-async function openPersonalInfoDialog() {
+async function showPersonalInfoInOutput() {
     if (!isLoggedIn()) {
         alert("Please login before viewing personal information.");
         return;
     }
 
-    const dialog = document.getElementById("personalInfoDialog");
-    const content = document.getElementById("personalInfoContent");
-    const notice = document.getElementById("personalInfoNotice");
-    const rawOutput = document.getElementById("personalInfoRawOutput");
+    const tableOutput = document.getElementById("policyTableContent");
+    const rawOutput = document.getElementById("outputContent");
 
-    dialog.classList.remove("hidden");
-    content.innerHTML = '<p class="loading">Loading personal information from remote MCP backend...</p>';
-    notice.textContent = "Mock sensitive data for demo validation only.";
+    clearLogs();
+    tableOutput.innerHTML = '<p class="loading">Loading personal information from remote MCP backend...</p>';
     rawOutput.textContent = JSON.stringify({ message: "Waiting for MCP response" }, null, 2);
+    rawOutput.className = "output-content";
+    addLog("[REQUEST] Tool: list_personal_info", "info");
 
     try {
         const response = await fetch("/api/agent/execute", {
@@ -177,16 +175,14 @@ async function openPersonalInfoDialog() {
         rawOutput.textContent = JSON.stringify(data, null, 2);
 
         if (!response.ok || !data.success) {
-            content.innerHTML = `<p class="loading">${escapeHtml(data.error || "Unable to load personal information")}</p>`;
+            rawOutput.className = "output-content error";
+            tableOutput.innerHTML = `<p class="loading">${escapeHtml(data.error || "Unable to load personal information")}</p>`;
             return;
         }
 
         const result = data.result || {};
-        notice.textContent = result.mock_data_notice || "All sensitive data values are fake demo identifiers.";
-        content.innerHTML = `
-            ${renderPersonalInfoSection("Consumers", result.consumers || [])}
-            ${renderPersonalInfoSection("Supervisors", result.supervisors || [])}
-        `;
+        rawOutput.className = "output-content success";
+        renderPersonalInfoOutput(result);
         (data.logs || []).forEach(logMsg => {
             const level = logMsg.includes("[ERROR]") ? "error" :
                 logMsg.includes("[SUCCESS]") ? "success" : "info";
@@ -194,14 +190,22 @@ async function openPersonalInfoDialog() {
         });
         addLog(`[PII] Loaded mock personal information for ${agentSession.displayName}`, "success");
     } catch (error) {
-        content.innerHTML = `<p class="loading">${escapeHtml(error.message)}</p>`;
+        tableOutput.innerHTML = `<p class="loading">${escapeHtml(error.message)}</p>`;
         rawOutput.textContent = JSON.stringify({ error: error.message }, null, 2);
+        rawOutput.className = "output-content error";
         addLog(`[ERROR] Personal information dialog failed: ${error.message}`, "error");
     }
 }
 
-function closePersonalInfoDialog() {
-    document.getElementById("personalInfoDialog").classList.add("hidden");
+function renderPersonalInfoOutput(result) {
+    const container = document.getElementById("policyTableContent");
+    container.innerHTML = `
+        <div class="pii-notice">
+            ${escapeHtml(result.mock_data_notice || "All SSN and passport values are fake demo identifiers.")}
+        </div>
+        ${renderPersonalInfoSection("Consumers", result.consumers || [])}
+        ${renderPersonalInfoSection("Supervisors", result.supervisors || [])}
+    `;
 }
 
 function renderPersonalInfoSection(title, profiles) {
