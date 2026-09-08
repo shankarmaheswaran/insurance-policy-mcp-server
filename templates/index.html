@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Policy Manager</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏢 Insurance Policy Manager</h1>
+            <p>Model Context Protocol Server GUI</p>
+            <a href="/agent" class="header-link">Open Policy Agent</a>
+        </header>
+
+        <div class="dashboard">
+            <!-- Stats Section -->
+            <section class="stats-section">
+                <h2>📊 Dashboard</h2>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalPolicies">0</div>
+                        <div class="stat-label">Total Policies</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="activePolicies">0</div>
+                        <div class="stat-label">Active Policies</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalClaims">0</div>
+                        <div class="stat-label">Total Claims</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="approvedClaims">0</div>
+                        <div class="stat-label">Approved Claims</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-button active" onclick="switchTab('policies')">Policies</button>
+                <button class="tab-button" onclick="switchTab('claims')">Claims</button>
+                <button class="tab-button" onclick="switchTab('create-policy')">New Policy</button>
+            </div>
+
+            <!-- Policies Tab -->
+            <section id="policies-tab" class="tab-content active">
+                <h2>📋 Policies</h2>
+                <div class="filter-bar">
+                    <input type="text" id="customerFilter" placeholder="Filter by customer ID" class="input-field">
+                    <button onclick="filterPolicies()" class="btn btn-primary">Filter</button>
+                    <button onclick="loadPolicies()" class="btn btn-secondary">Reset</button>
+                </div>
+                <div id="policiesList" class="list-container">
+                    <p class="loading">Loading policies...</p>
+                </div>
+            </section>
+
+            <!-- Claims Tab -->
+            <section id="claims-tab" class="tab-content">
+                <h2>📝 Claims</h2>
+                <div class="filter-bar">
+                    <input type="text" id="policyFilter" placeholder="Filter by policy ID" class="input-field">
+                    <button onclick="filterClaims()" class="btn btn-primary">Filter</button>
+                    <button onclick="loadClaims()" class="btn btn-secondary">Reset</button>
+                </div>
+                <div id="claimsList" class="list-container">
+                    <p class="loading">Loading claims...</p>
+                </div>
+            </section>
+
+            <!-- Create Policy Tab -->
+            <section id="create-policy-tab" class="tab-content">
+                <h2>➕ Create New Policy</h2>
+                <form id="policyForm" class="form">
+                    <div class="form-group">
+                        <label for="customerId">Customer ID:</label>
+                        <input type="text" id="customerId" required class="input-field">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="policyType">Policy Type:</label>
+                        <select id="policyType" required class="input-field">
+                            <option value="">Select type...</option>
+                            <option value="auto">Auto</option>
+                            <option value="home">Home</option>
+                            <option value="health">Health</option>
+                            <option value="life">Life</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="startDate">Start Date:</label>
+                            <input type="date" id="startDate" required class="input-field">
+                        </div>
+                        <div class="form-group">
+                            <label for="endDate">End Date:</label>
+                            <input type="date" id="endDate" required class="input-field">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="premium">Premium ($):</label>
+                            <input type="number" id="premium" required step="0.01" class="input-field">
+                        </div>
+                        <div class="form-group">
+                            <label for="deductible">Deductible ($):</label>
+                            <input type="number" id="deductible" required step="0.01" class="input-field">
+                        </div>
+                        <div class="form-group">
+                            <label for="policyLimit">Policy Limit ($):</label>
+                            <input type="number" id="policyLimit" required step="0.01" class="input-field">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Coverage Options:</label>
+                        <div id="coverageOptions" class="checkbox-group"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-large">Create Policy</button>
+                </form>
+                <div id="formMessage" class="message"></div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

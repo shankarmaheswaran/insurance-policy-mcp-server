@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "insurance-policy-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "src.server"],
+      "env": {}
+    }
+  }
+}

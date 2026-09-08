@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Policy MCP - Policy Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/test-console.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Policy Agent</h1>
+            <p>Interactive agent workspace for insurance policy tools</p>
+        </header>
+
+        <div class="dashboard">
+            <!-- Navigation -->
+            <div class="nav-links">
+                <a href="/" class="nav-link">← Back to Dashboard</a>
+            </div>
+
+            <!-- Tool Selector -->
+            <section class="tool-selector-section">
+                <h2>Select Agent Action</h2>
+                <select id="toolSelector" class="input-field" onchange="loadToolSchema()">
+                    <option value="">-- Select an agent action --</option>
+                </select>
+            </section>
+
+            <!-- Main Testing Area -->
+            <div class="test-area">
+                <!-- Input Panel -->
+                <div class="panel input-panel">
+                    <div class="panel-header">
+                        <h3>Agent Input</h3>
+                        <button onclick="copyInput()" class="btn btn-small">📋 Copy</button>
+                    </div>
+                    <div class="panel-content">
+                        <div id="inputForm" class="input-form"></div>
+                        <button onclick="executeAgent()" class="btn btn-primary btn-large" style="margin-top: 20px;">Run Policy Agent</button>
+                    </div>
+                </div>
+
+                <!-- Output Panel -->
+                <div class="panel output-panel">
+                    <div class="panel-header">
+                        <h3>Agent Output</h3>
+                        <button onclick="copyOutput()" class="btn btn-small">📋 Copy</button>
+                    </div>
+                    <div class="panel-content">
+                        <pre id="outputContent" class="output-content">
+{
+  "result": null,
+    "message": "Run the Policy Agent to see results here"
+}
+                        </pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Panel (Full Width) -->
+            <div class="panel logs-panel">
+                <div class="panel-header">
+                    <h3>Background Trace</h3>
+                    <button onclick="clearLogs()" class="btn btn-small">🗑️ Clear</button>
+                </div>
+                <div class="panel-content">
+                    <div id="logsContent" class="logs-content">
+                        <div class="log-entry log-info">Policy Agent ready. Select an action and run it.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tool Documentation -->
+            <section class="tool-docs-section">
+                <h2>Agent Capabilities</h2>
+                <div id="toolDocs" class="tool-docs">
+                    <p class="loading">Select an agent action to view details</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/test-console.js"></script>
+</body>
+</html>
