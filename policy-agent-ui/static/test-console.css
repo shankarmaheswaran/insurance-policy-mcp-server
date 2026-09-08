@@ -226,8 +226,8 @@
 /* Test Area Layout */
 .test-area {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    grid-template-columns: 1fr;
+    gap: 22px;
     margin-bottom: 25px;
 }
 
@@ -268,10 +268,19 @@
 
 .input-panel {
     border-left: 4px solid #3b82f6;
+    box-shadow: 0 10px 28px rgba(37, 99, 235, 0.12);
+    max-width: 980px;
+    width: 100%;
+    justify-self: center;
+}
+
+.input-panel .panel-content {
+    background: #f8fafc;
 }
 
 .output-panel {
     border-left: 4px solid #10b981;
+    width: 100%;
 }
 
 .output-split {
