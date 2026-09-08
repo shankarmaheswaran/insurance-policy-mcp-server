@@ -688,6 +688,85 @@
     white-space: pre-wrap;
 }
 
+.comparison-result {
+    align-items: stretch;
+    display: grid;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.comparison-column {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    min-width: 0;
+    padding: 14px;
+}
+
+.comparison-column p {
+    color: var(--text-light);
+    line-height: 1.45;
+    margin-bottom: 12px;
+}
+
+.direct-column {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+.gateway-column {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.comparison-heading {
+    color: var(--text-dark);
+    font-size: 1em;
+    font-weight: 900;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.comparison-column pre {
+    background: #1e293b;
+    border-radius: 6px;
+    color: #e2e8f0;
+    margin: 0;
+    max-height: 360px;
+    overflow: auto;
+    padding: 10px;
+    white-space: pre-wrap;
+}
+
+.comparison-separator {
+    align-self: center;
+    background: var(--text-dark);
+    border-radius: 999px;
+    color: white;
+    font-size: 0.78em;
+    font-weight: 900;
+    padding: 8px 10px;
+    writing-mode: vertical-rl;
+}
+
+.comparison-decision {
+    border-radius: 8px;
+    font-weight: 900;
+    margin-top: 14px;
+    padding: 12px 14px;
+}
+
+.comparison-decision.blocked {
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    color: #166534;
+}
+
+.comparison-decision.allowed {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
 /* Logs Content */
 .logs-content {
     background: #1e293b;
@@ -960,6 +1039,15 @@
 
     .logs-panel {
         grid-column: 1;
+    }
+
+    .comparison-result {
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-separator {
+        justify-self: center;
+        writing-mode: horizontal-tb;
     }
 }
 

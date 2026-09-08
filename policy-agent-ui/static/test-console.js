@@ -650,10 +650,32 @@ function renderComparisonResult(scenario, directResult, gatewayResponse) {
         </div>
         <section class="personal-info-section">
             <h3>${escapeHtml(scenario.action)}</h3>
-            <div class="dev-lab-result-grid">
-                <div><strong>Direct Result</strong><pre>${escapeHtml(JSON.stringify(directResult.result, null, 2))}</pre></div>
-                <div><strong>MCP Gateway Decision</strong><pre>${escapeHtml(gatewayResponse.blocked ? "Blocked or rejected" : "Not blocked")}</pre></div>
-                <div><strong>MCP Gateway Raw Summary</strong><pre>${escapeHtml(JSON.stringify(gatewayResponse.raw, null, 2))}</pre></div>
+            <div class="comparison-result">
+                <div class="comparison-column direct-column">
+                    <div class="comparison-heading">Direct Mode</div>
+                    <p>Mock vulnerable path. The unsafe action is allowed in the lab simulation.</p>
+                    <pre>${escapeHtml(JSON.stringify({
+                        route_mode: directResult.route_mode,
+                        allowed: directResult.allowed,
+                        dev_lab_insecure: directResult.dev_lab_insecure,
+                        input: directResult.input,
+                        result: directResult.result,
+                    }, null, 2))}</pre>
+                </div>
+                <div class="comparison-separator">VERSUS</div>
+                <div class="comparison-column gateway-column">
+                    <div class="comparison-heading">MCP Gateway</div>
+                    <p>Firewall path. The same action is sent through the Palo Alto / Portkey MCP Gateway.</p>
+                    <pre>${escapeHtml(JSON.stringify({
+                        route_mode: "mcp_gateway",
+                        decision: gatewayResponse.blocked ? "Blocked or rejected" : "Not blocked",
+                        http_status: gatewayResponse.status,
+                        raw_response: gatewayResponse.raw,
+                    }, null, 2))}</pre>
+                </div>
+            </div>
+            <div class="comparison-decision ${gatewayResponse.blocked ? "blocked" : "allowed"}">
+                Firewall decision: ${escapeHtml(gatewayResponse.blocked ? "Blocked or rejected by MCP Gateway" : "Not blocked by MCP Gateway")}
             </div>
         </section>
     `;
