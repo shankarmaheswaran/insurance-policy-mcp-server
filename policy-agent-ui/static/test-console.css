@@ -859,6 +859,17 @@
     white-space: pre-wrap;
 }
 
+.lab-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.lab-actions .btn {
+    flex: 1 1 110px;
+}
+
 .tool-doc {
     margin-bottom: 25px;
 }

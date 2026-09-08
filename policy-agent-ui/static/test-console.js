@@ -485,6 +485,131 @@ function renderDevLabResult(scenario) {
     `;
 }
 
+function getHeadersForMode(mode) {
+    const originalMode = connectionMode;
+    connectionMode = mode;
+    const headers = getAgentHeaders();
+    connectionMode = originalMode;
+    return headers;
+}
+
+async function runGatewayLabScenario(scenario) {
+    if (!isLoggedIn()) {
+        alert("Please login before running gateway lab checks.");
+        return;
+    }
+
+    const selectedScenario = getDevLabScenarios()[scenario];
+    if (!selectedScenario) {
+        return;
+    }
+
+    clearLogs();
+    addLog(`[GATEWAY] Sending ${selectedScenario.action} through MCP Gateway firewall`, "info");
+    const gatewayResponse = await executeScenarioThroughGateway(selectedScenario);
+
+    document.getElementById("outputContent").textContent = JSON.stringify(gatewayResponse.raw, null, 2);
+    document.getElementById("outputContent").className = gatewayResponse.blocked ? "output-content success" : "output-content warning";
+    renderGatewayLabResult(selectedScenario, gatewayResponse);
+}
+
+async function compareLabScenario(scenario) {
+    if (!isLoggedIn()) {
+        alert("Please login before comparing lab scenarios.");
+        return;
+    }
+
+    const selectedScenario = getDevLabScenarios()[scenario];
+    if (!selectedScenario) {
+        return;
+    }
+
+    clearLogs();
+    addLog(`[COMPARE] Direct lab allows simulated ${selectedScenario.action}`, "warning");
+    addLog(`[COMPARE] Sending same scenario through MCP Gateway firewall`, "info");
+    const gatewayResponse = await executeScenarioThroughGateway(selectedScenario);
+    const directResult = {
+        allowed: true,
+        route_mode: "direct",
+        dev_lab_insecure: true,
+        action: selectedScenario.action,
+        input: selectedScenario.input,
+        result: selectedScenario.result,
+    };
+
+    const comparison = {
+        scenario: selectedScenario.action,
+        direct_result: directResult,
+        mcp_gateway_result: gatewayResponse.raw,
+        firewall_decision: gatewayResponse.blocked ? "blocked_or_rejected" : "not_blocked",
+    };
+
+    document.getElementById("outputContent").textContent = JSON.stringify(comparison, null, 2);
+    document.getElementById("outputContent").className = gatewayResponse.blocked ? "output-content success" : "output-content warning";
+    renderComparisonResult(selectedScenario, directResult, gatewayResponse);
+}
+
+async function executeScenarioThroughGateway(scenario) {
+    try {
+        const response = await fetch("/api/agent/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getHeadersForMode("mcp_gateway") },
+            body: JSON.stringify({
+                tool_name: scenario.action,
+                params: typeof scenario.input === "string" ? { prompt: scenario.input } : scenario.input
+            })
+        });
+        const data = await response.json();
+        const blocked = !response.ok || data.success === false;
+        (data.logs || []).forEach(logMsg => {
+            const level = logMsg.includes("[ERROR]") ? "error" :
+                logMsg.includes("[SUCCESS]") ? "success" : "info";
+            addLog(logMsg, level);
+        });
+        addLog(blocked ? "[GATEWAY] Firewall/gateway rejected the scenario" : "[GATEWAY] Scenario was not blocked", blocked ? "success" : "warning");
+        return { blocked, status: response.status, raw: data };
+    } catch (error) {
+        addLog(`[GATEWAY] Gateway request failed: ${error.message}`, "error");
+        return {
+            blocked: true,
+            status: 502,
+            raw: { success: false, error: error.message, logs: [`[ERROR] ${error.message}`] }
+        };
+    }
+}
+
+function renderGatewayLabResult(scenario, gatewayResponse) {
+    document.getElementById("policyTableContent").innerHTML = `
+        <div class="pii-notice">
+            MCP GATEWAY FIREWALL CHECK: The scenario was sent through MCP GW mode. Review the raw MCP output for the gateway decision.
+        </div>
+        <section class="personal-info-section">
+            <h3>${escapeHtml(scenario.action)}</h3>
+            <div class="dev-lab-result-grid">
+                <div><strong>Gateway Decision</strong><pre>${escapeHtml(gatewayResponse.blocked ? "Blocked or rejected" : "Not blocked")}</pre></div>
+                <div><strong>HTTP Status</strong><pre>${escapeHtml(gatewayResponse.status)}</pre></div>
+                <div><strong>Input Sent</strong><pre>${escapeHtml(JSON.stringify(scenario.input, null, 2))}</pre></div>
+            </div>
+        </section>
+    `;
+}
+
+function renderComparisonResult(scenario, directResult, gatewayResponse) {
+    document.getElementById("policyTableContent").innerHTML = `
+        <div class="pii-notice">
+            FIREWALL DEMO: Direct mode shows the mock unsafe outcome. MCP Gateway mode should block or reject the same scenario.
+        </div>
+        <section class="personal-info-section">
+            <h3>${escapeHtml(scenario.action)}</h3>
+            <div class="dev-lab-result-grid">
+                <div><strong>Direct Result</strong><pre>${escapeHtml(JSON.stringify(directResult.result, null, 2))}</pre></div>
+                <div><strong>MCP Gateway Decision</strong><pre>${escapeHtml(gatewayResponse.blocked ? "Blocked or rejected" : "Not blocked")}</pre></div>
+                <div><strong>MCP Gateway Raw Summary</strong><pre>${escapeHtml(JSON.stringify(gatewayResponse.raw, null, 2))}</pre></div>
+            </div>
+        </section>
+    `;
+}
+
 // Verify remote MCP backend connection
 async function verifyConnection() {
     if (!isLoggedIn()) {
