@@ -5,23 +5,48 @@ let currentTool = null;
 let logs = [];
 let loginOptions = [];
 let agentSession = {
-    username: localStorage.getItem("policyAgentUsername") || "consumer01",
-    role: localStorage.getItem("policyAgentRole") || "consumer",
-    customerId: localStorage.getItem("policyAgentCustomerId") || "CUST-001"
+    username: "",
+    role: "",
+    customerId: ""
 };
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
     restoreAgentSession();
     await loadLoginOptions();
-    await verifyConnection();
-    await loadTools();
+    if (isLoggedIn()) {
+        showProtectedAgentSections();
+        await verifyConnection();
+        await loadTools();
+    } else {
+        hideProtectedAgentSections();
+    }
 });
 
+function isLoggedIn() {
+    return Boolean(agentSession.role && agentSession.username);
+}
+
+function showProtectedAgentSections() {
+    document.querySelectorAll(".agent-protected").forEach(section => {
+        section.classList.remove("hidden");
+    });
+}
+
+function hideProtectedAgentSections() {
+    document.querySelectorAll(".agent-protected").forEach(section => {
+        section.classList.add("hidden");
+    });
+}
+
 function getAgentHeaders() {
-    const headers = {
-        "X-Policy-Agent-Role": agentSession.role
-    };
+    const headers = {};
+    if (agentSession.role) {
+        headers["X-Policy-Agent-Role"] = agentSession.role;
+    }
+    if (agentSession.username) {
+        headers["X-Policy-Agent-Username"] = agentSession.username;
+    }
     if (agentSession.customerId) {
         headers["X-Policy-Agent-Customer-Id"] = agentSession.customerId;
     }
@@ -29,11 +54,12 @@ function getAgentHeaders() {
 }
 
 function restoreAgentSession() {
-    const roleInput = document.querySelector(`input[name="agentRole"][value="${agentSession.role}"]`);
+    const roleValue = agentSession.role || "consumer";
+    const roleInput = document.querySelector(`input[name="agentRole"][value="${roleValue}"]`);
     if (roleInput) {
         roleInput.checked = true;
     }
-    document.getElementById("customerScope").value = agentSession.customerId;
+    document.getElementById("customerScope").value = agentSession.customerId || "";
     updateRoleDisplay();
 }
 
@@ -54,21 +80,24 @@ function populateLoginSelect() {
     const roleLogins = loginOptions.filter(login => login.role === selectedRole);
 
     selector.innerHTML = roleLogins.map(login => {
-        const customerText = login.customer_id ? ` (${login.customer_id})` : "";
-        return `<option value="${login.username}">${login.username} - ${login.display_name}${customerText}</option>`;
+        return `<option value="${login.username}">${login.username}</option>`;
     }).join("");
 
     const matchingLogin = roleLogins.find(login => login.username === agentSession.username) || roleLogins[0];
     if (matchingLogin) {
         selector.value = matchingLogin.username;
-        applySelectedLogin(matchingLogin);
+        if (isLoggedIn() && matchingLogin.username === agentSession.username) {
+            applySelectedLogin(matchingLogin, false);
+        } else {
+            document.getElementById("customerScope").value = "";
+        }
     }
 }
 
 function handleLoginSelection() {
     const selectedLogin = getSelectedLogin();
     if (selectedLogin) {
-        applySelectedLogin(selectedLogin);
+        document.getElementById("customerScope").value = "";
     }
 }
 
@@ -80,7 +109,7 @@ function getSelectedLogin() {
 function applySelectedLogin(login) {
     agentSession.username = login.username;
     agentSession.role = login.role;
-    agentSession.customerId = login.customer_id || "";
+    agentSession.customerId = "";
     document.getElementById("customerScope").value = agentSession.customerId;
     updateRoleDisplay();
 }
@@ -93,13 +122,11 @@ function loginAgent() {
     agentSession = {
         username: selectedLogin ? selectedLogin.username : `${selectedRole}-manual`,
         role: selectedRole,
-        customerId: selectedRole === "consumer" && selectedLogin ? selectedLogin.customer_id : customerId
+        customerId: customerId
     };
-    localStorage.setItem("policyAgentUsername", agentSession.username);
-    localStorage.setItem("policyAgentRole", agentSession.role);
-    localStorage.setItem("policyAgentCustomerId", agentSession.customerId);
 
     updateRoleDisplay();
+    showProtectedAgentSections();
     clearLogs();
     addLog(`[AUTH] Logged in as ${agentSession.role}${agentSession.customerId ? ` with customer scope ${agentSession.customerId}` : ""}`, "success");
     verifyConnection();
@@ -107,20 +134,24 @@ function loginAgent() {
 }
 
 function logoutAgent() {
-    localStorage.removeItem("policyAgentUsername");
-    localStorage.removeItem("policyAgentRole");
-    localStorage.removeItem("policyAgentCustomerId");
-    agentSession = { username: "consumer01", role: "consumer", customerId: "CUST-001" };
+    agentSession = { username: "", role: "", customerId: "" };
     restoreAgentSession();
     populateLoginSelect();
-    clearLogs();
-    addLog("[AUTH] Logged out. Defaulted to consumer role.", "info");
-    verifyConnection();
-    loadTools();
+    hideProtectedAgentSections();
+    availableTools = [];
+    currentTool = null;
+    document.getElementById("toolSelector").innerHTML = '<option value="">-- Login required --</option>';
+    document.getElementById("inputForm").innerHTML = "";
+    document.getElementById("outputContent").textContent = JSON.stringify({ result: null, message: "Login required" }, null, 2);
 }
 
 function updateRoleDisplay() {
     const activeRole = document.getElementById("activeRole");
+    if (!isLoggedIn()) {
+        activeRole.textContent = "Not signed in";
+        document.getElementById("roleLoginSection").dataset.role = "signed-out";
+        return;
+    }
     activeRole.textContent = agentSession.role === "consumer" && agentSession.customerId
         ? `Signed in: ${agentSession.username} / consumer (${agentSession.customerId})`
         : `Signed in: ${agentSession.username} / ${agentSession.role}`;
@@ -129,6 +160,11 @@ function updateRoleDisplay() {
 
 // Verify remote MCP backend connection
 async function verifyConnection() {
+    if (!isLoggedIn()) {
+        hideProtectedAgentSections();
+        return;
+    }
+
     const section = document.getElementById("connectionSection");
     const statusEl = document.getElementById("connectionStatus");
     const messageEl = document.getElementById("connectionMessage");
@@ -196,6 +232,11 @@ function renderConnectionLogs(connectionLogs) {
 
 // Load available tools
 async function loadTools() {
+    if (!isLoggedIn()) {
+        availableTools = [];
+        return;
+    }
+
     try {
         const response = await fetch("/api/agent/tools", {
             headers: getAgentHeaders()

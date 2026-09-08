@@ -107,12 +107,22 @@ ROLE_PERMISSIONS = {
 }
 
 
-def get_agent_context() -> tuple[str, str | None]:
+def get_agent_context() -> tuple[str | None, str | None]:
     """Read the role context sent by the laptop Policy Agent UI."""
-    role = request.headers.get("X-Policy-Agent-Role", "consumer").lower()
+    role_header = request.headers.get("X-Policy-Agent-Role")
+    username = request.headers.get("X-Policy-Agent-Username")
     customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
+    if not role_header or not username:
+        return None, customer_id
+
+    role = role_header.lower()
     if role not in ROLE_PERMISSIONS:
-        role = "consumer"
+        return None, customer_id
+
+    login = store.agent_logins.get(username)
+    if not login or login.role != role:
+        return None, customer_id
+    customer_id = login.customer_id or customer_id
     return role, customer_id
 
 
@@ -130,6 +140,11 @@ def serialize_login(login) -> dict:
         "display_name": login.display_name,
         "customer_id": login.customer_id,
     }
+
+
+def serialize_public_login(login) -> dict:
+    """Serialize non-sensitive login choices for the signed-out UI."""
+    return {"username": login.username, "role": login.role}
 
 
 def error_result(message: str, logs: list[str], status_code: int = 403):
@@ -237,6 +252,9 @@ def agent_execute_tool():
     logs: list[str] = []
     try:
         role, customer_id = get_agent_context()
+        if role is None:
+            return error_result("Login role is required before running Policy Agent actions", logs, 401)
+
         data = request.json or {}
         tool_name = data.get("tool_name")
         tool_params = data.get("params", {})
@@ -391,6 +409,9 @@ def agent_execute_tool():
 def agent_get_tools():
     """Get available Policy Agent actions."""
     role, _ = get_agent_context()
+    if role is None:
+        return jsonify({"error": "Login role is required before viewing MCP actions"}), 401
+
     return jsonify(get_tools_for_role(role))
 
 
@@ -398,7 +419,7 @@ def agent_get_tools():
 def agent_get_logins():
     """Get demo Policy Agent login accounts for the UI."""
     role = request.args.get("role")
-    return jsonify([serialize_login(login) for login in store.list_agent_logins(role)])
+    return jsonify([serialize_public_login(login) for login in store.list_agent_logins(role)])
 
 
 if __name__ == "__main__":

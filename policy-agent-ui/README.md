@@ -26,6 +26,8 @@ The Policy Agent login supports three demo roles:
 
 The login picker loads 10 consumer accounts, 3 supervisor accounts, and 1 admin account from the EC2 backend. The selected role and customer scope are sent to the EC2 backend on every Policy Agent request.
 
+The Policy Agent starts signed out on each page load. Remote MCP connection details, action lists, inputs, outputs, and trace logs stay hidden until a demo login is selected and the user clicks `Login to Policy Agent`.
+
 ## Validate
 
 ```bash

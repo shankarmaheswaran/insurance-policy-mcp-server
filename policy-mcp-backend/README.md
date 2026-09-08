@@ -27,8 +27,11 @@ python3 -m pytest tests/ -q
 
 The backend enforces role-based access for `/api/agent/tools` and `/api/agent/execute` using headers from the laptop Policy Agent UI:
 
+- `X-Policy-Agent-Username`: selected demo login account
 - `X-Policy-Agent-Role`: `consumer`, `supervisor`, or `admin`
 - `X-Policy-Agent-Customer-Id`: customer scope used by consumer access
+
+Protected agent endpoints require both `X-Policy-Agent-Username` and `X-Policy-Agent-Role`. Requests without a selected login return `401`.
 
 Role access:
 
