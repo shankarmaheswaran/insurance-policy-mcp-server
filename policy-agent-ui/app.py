@@ -92,12 +92,16 @@ def health_check():
 @app.route("/api/agent/connection", methods=["GET"])
 def agent_connection_check():
     """Verify that the Policy Agent UI is connected to the remote backend."""
+    agent_role = request.headers.get("X-Policy-Agent-Role")
+    agent_username = request.headers.get("X-Policy-Agent-Username")
+    if not agent_role or not agent_username:
+        return jsonify({"error": "Login is required before viewing MCP connection details"}), 401
+
     missing_backend = require_backend_url()
     if missing_backend:
         return missing_backend
 
     backend_host = urlparse(BACKEND_URL).hostname or BACKEND_URL
-    agent_role = request.headers.get("X-Policy-Agent-Role", "consumer")
     agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
     logs = [
         f"[CONFIG] Local Policy Agent backend URL: {BACKEND_URL}",
@@ -105,6 +109,8 @@ def agent_connection_check():
         f"[AUTH] Agent role: {agent_role}",
         "[CHECK] Calling remote backend /health endpoint...",
     ]
+    if agent_username:
+        logs.append(f"[AUTH] Agent login: {agent_username}")
     if agent_customer_id:
         logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
 
@@ -119,6 +125,7 @@ def agent_connection_check():
             headers={
                 "Accept": "application/json",
                 "X-Policy-Agent-Role": agent_role,
+                "X-Policy-Agent-Username": agent_username or "",
                 "X-Policy-Agent-Customer-Id": agent_customer_id or "",
             },
         )
