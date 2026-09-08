@@ -3,7 +3,9 @@
 let availableTools = [];
 let currentTool = null;
 let logs = [];
+let loginOptions = [];
 let agentSession = {
+    username: localStorage.getItem("policyAgentUsername") || "consumer01",
     role: localStorage.getItem("policyAgentRole") || "consumer",
     customerId: localStorage.getItem("policyAgentCustomerId") || "CUST-001"
 };
@@ -11,6 +13,7 @@ let agentSession = {
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
     restoreAgentSession();
+    await loadLoginOptions();
     await verifyConnection();
     await loadTools();
 });
@@ -34,14 +37,65 @@ function restoreAgentSession() {
     updateRoleDisplay();
 }
 
+async function loadLoginOptions() {
+    try {
+        const response = await fetch("/api/agent/logins");
+        loginOptions = await response.json();
+        populateLoginSelect();
+        addLog(`✓ Loaded ${loginOptions.length} demo login accounts from remote MCP backend`, "success");
+    } catch (error) {
+        addLog(`✗ Error loading demo logins: ${error.message}`, "error");
+    }
+}
+
+function populateLoginSelect() {
+    const selector = document.getElementById("loginSelector");
+    const selectedRole = document.querySelector('input[name="agentRole"]:checked').value;
+    const roleLogins = loginOptions.filter(login => login.role === selectedRole);
+
+    selector.innerHTML = roleLogins.map(login => {
+        const customerText = login.customer_id ? ` (${login.customer_id})` : "";
+        return `<option value="${login.username}">${login.username} - ${login.display_name}${customerText}</option>`;
+    }).join("");
+
+    const matchingLogin = roleLogins.find(login => login.username === agentSession.username) || roleLogins[0];
+    if (matchingLogin) {
+        selector.value = matchingLogin.username;
+        applySelectedLogin(matchingLogin);
+    }
+}
+
+function handleLoginSelection() {
+    const selectedLogin = getSelectedLogin();
+    if (selectedLogin) {
+        applySelectedLogin(selectedLogin);
+    }
+}
+
+function getSelectedLogin() {
+    const username = document.getElementById("loginSelector").value;
+    return loginOptions.find(login => login.username === username);
+}
+
+function applySelectedLogin(login) {
+    agentSession.username = login.username;
+    agentSession.role = login.role;
+    agentSession.customerId = login.customer_id || "";
+    document.getElementById("customerScope").value = agentSession.customerId;
+    updateRoleDisplay();
+}
+
 function loginAgent() {
     const selectedRole = document.querySelector('input[name="agentRole"]:checked').value;
+    const selectedLogin = getSelectedLogin();
     const customerId = document.getElementById("customerScope").value.trim();
 
     agentSession = {
+        username: selectedLogin ? selectedLogin.username : `${selectedRole}-manual`,
         role: selectedRole,
-        customerId: selectedRole === "consumer" ? customerId : customerId
+        customerId: selectedRole === "consumer" && selectedLogin ? selectedLogin.customer_id : customerId
     };
+    localStorage.setItem("policyAgentUsername", agentSession.username);
     localStorage.setItem("policyAgentRole", agentSession.role);
     localStorage.setItem("policyAgentCustomerId", agentSession.customerId);
 
@@ -53,10 +107,12 @@ function loginAgent() {
 }
 
 function logoutAgent() {
+    localStorage.removeItem("policyAgentUsername");
     localStorage.removeItem("policyAgentRole");
     localStorage.removeItem("policyAgentCustomerId");
-    agentSession = { role: "consumer", customerId: "CUST-001" };
+    agentSession = { username: "consumer01", role: "consumer", customerId: "CUST-001" };
     restoreAgentSession();
+    populateLoginSelect();
     clearLogs();
     addLog("[AUTH] Logged out. Defaulted to consumer role.", "info");
     verifyConnection();
@@ -66,8 +122,8 @@ function logoutAgent() {
 function updateRoleDisplay() {
     const activeRole = document.getElementById("activeRole");
     activeRole.textContent = agentSession.role === "consumer" && agentSession.customerId
-        ? `Signed in: consumer (${agentSession.customerId})`
-        : `Signed in: ${agentSession.role}`;
+        ? `Signed in: ${agentSession.username} / consumer (${agentSession.customerId})`
+        : `Signed in: ${agentSession.username} / ${agentSession.role}`;
     document.getElementById("roleLoginSection").dataset.role = agentSession.role;
 }
 

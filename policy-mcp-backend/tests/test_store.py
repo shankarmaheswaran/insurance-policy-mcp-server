@@ -129,6 +129,28 @@ class TestPolicyStore:
         assert policy1.id.startswith("POL-")
         assert policy2.id.startswith("POL-")
 
+    def test_seeded_policy_holders(self, store: PolicyStore) -> None:
+        """Test seeded fictional policy holder records"""
+        holders = store.list_policy_holders()
+        assert len(holders) == 10
+        assert holders[0].customer_id == "CUST-001"
+        assert holders[0].ssn.startswith("FAKE-SSN-")
+        assert holders[0].passport_number.startswith("FAKE-PASS-")
+
+    def test_get_policy_holder(self, store: PolicyStore) -> None:
+        """Test retrieving a seeded policy holder"""
+        holder = store.get_policy_holder("CUST-004")
+        assert holder is not None
+        assert holder.name == "Priya Raman"
+        assert holder.family_members == 4
+
+    def test_seeded_agent_logins(self, store: PolicyStore) -> None:
+        """Test seeded demo login accounts by role"""
+        assert len(store.list_agent_logins("consumer")) == 10
+        assert len(store.list_agent_logins("supervisor")) == 3
+        assert len(store.list_agent_logins("admin")) == 1
+        assert len(store.list_agent_logins()) == 14
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

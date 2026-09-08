@@ -64,11 +64,45 @@ AGENT_TOOLS = [
         "allowed_roles": ["consumer", "supervisor", "admin"],
         "params": {"policy_id": "string (optional)"},
     },
+    {
+        "name": "get_policy_holder",
+        "description": "Get a policy holder profile visible to the signed-in role",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {"customer_id": "string"},
+    },
+    {
+        "name": "list_policy_holders",
+        "description": "List policy holder profiles visible to the signed-in role",
+        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "params": {},
+    },
+    {
+        "name": "list_agent_logins",
+        "description": "List demo Policy Agent login accounts",
+        "allowed_roles": ["admin"],
+        "params": {"role": "consumer|supervisor|admin (optional)"},
+    },
 ]
 
 ROLE_PERMISSIONS = {
-    "consumer": {"get_policy", "list_policies", "get_coverage_options", "submit_claim", "list_claims"},
-    "supervisor": {"get_policy", "list_policies", "get_coverage_options", "submit_claim", "list_claims"},
+    "consumer": {
+        "get_policy",
+        "list_policies",
+        "get_coverage_options",
+        "submit_claim",
+        "list_claims",
+        "get_policy_holder",
+        "list_policy_holders",
+    },
+    "supervisor": {
+        "get_policy",
+        "list_policies",
+        "get_coverage_options",
+        "submit_claim",
+        "list_claims",
+        "get_policy_holder",
+        "list_policy_holders",
+    },
     "admin": {tool["name"] for tool in AGENT_TOOLS},
 }
 
@@ -86,6 +120,16 @@ def get_tools_for_role(role: str) -> list[dict]:
     """Return only the MCP actions available to a role."""
     allowed_tools = ROLE_PERMISSIONS.get(role, ROLE_PERMISSIONS["consumer"])
     return [tool for tool in AGENT_TOOLS if tool["name"] in allowed_tools]
+
+
+def serialize_login(login) -> dict:
+    """Serialize demo login accounts for API responses."""
+    return {
+        "username": login.username,
+        "role": login.role,
+        "display_name": login.display_name,
+        "customer_id": login.customer_id,
+    }
 
 
 def error_result(message: str, logs: list[str], status_code: int = 403):
@@ -293,6 +337,37 @@ def agent_execute_tool():
             result = [claim.__dict__ for claim in claims]
             logs.append(f"[SUCCESS] Found {len(claims)} claims")
 
+        elif tool_name == "get_policy_holder":
+            logs.append("[EXECUTING] Retrieving policy holder profile...")
+            requested_customer_id = tool_params["customer_id"]
+            if role == "consumer" and requested_customer_id != customer_id:
+                return error_result("Consumer role can only access its own profile", logs)
+            holder = store.get_policy_holder(requested_customer_id)
+            if holder:
+                result = holder.__dict__
+                logs.append("[SUCCESS] Policy holder profile found")
+            else:
+                logs.append(f"[WARNING] Policy holder not found: {requested_customer_id}")
+
+        elif tool_name == "list_policy_holders":
+            logs.append("[EXECUTING] Listing policy holder profiles...")
+            if role == "consumer":
+                if not customer_id:
+                    return error_result("Consumer role requires a customer ID scope", logs)
+                holder = store.get_policy_holder(customer_id)
+                holders = [holder] if holder else []
+                logs.append(f"[AUTH] Consumer holder list scoped to {customer_id}")
+            else:
+                holders = store.list_policy_holders()
+            result = [holder.__dict__ for holder in holders]
+            logs.append(f"[SUCCESS] Found {len(holders)} policy holder profiles")
+
+        elif tool_name == "list_agent_logins":
+            logs.append("[EXECUTING] Listing demo agent logins...")
+            logins = store.list_agent_logins(tool_params.get("role"))
+            result = [serialize_login(login) for login in logins]
+            logs.append(f"[SUCCESS] Found {len(logins)} demo login accounts")
+
         else:
             logs.append(f"[ERROR] Unknown tool: {tool_name}")
             return jsonify(
@@ -317,6 +392,13 @@ def agent_get_tools():
     """Get available Policy Agent actions."""
     role, _ = get_agent_context()
     return jsonify(get_tools_for_role(role))
+
+
+@app.route("/api/agent/logins", methods=["GET"])
+def agent_get_logins():
+    """Get demo Policy Agent login accounts for the UI."""
+    role = request.args.get("role")
+    return jsonify([serialize_login(login) for login in store.list_agent_logins(role)])
 
 
 if __name__ == "__main__":

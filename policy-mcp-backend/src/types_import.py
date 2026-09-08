@@ -45,6 +45,28 @@ class Claim:
 
 
 @dataclass
+class PolicyHolder:
+    """Fictional policy holder profile for demos"""
+    customer_id: str
+    name: str
+    phone_number: str
+    address: str
+    ssn: str
+    passport_number: str
+    annual_income: float
+    family_members: int
+
+
+@dataclass
+class AgentLogin:
+    """Demo Policy Agent login account"""
+    username: str
+    role: Literal["consumer", "supervisor", "admin"]
+    display_name: str
+    customer_id: str | None = None
+
+
+@dataclass
 class CreatePolicyInput:
     """Input for creating a new policy"""
     customer_id: str

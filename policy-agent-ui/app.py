@@ -218,6 +218,12 @@ def agent_get_tools():
     return backend_request("/api/agent/tools")
 
 
+@app.route("/api/agent/logins", methods=["GET"])
+def agent_get_logins():
+    """Proxy demo Policy Agent login account requests."""
+    return backend_request("/api/agent/logins")
+
+
 if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "5000"))

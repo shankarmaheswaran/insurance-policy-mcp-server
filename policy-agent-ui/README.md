@@ -24,7 +24,7 @@ The Policy Agent login supports three demo roles:
 - `supervisor`: can review policies, claims, and coverage options across customers, and submit claims.
 - `admin`: has full access, including creating new policies.
 
-The selected role and customer scope are sent to the EC2 backend on every Policy Agent request.
+The login picker loads 10 consumer accounts, 3 supervisor accounts, and 1 admin account from the EC2 backend. The selected role and customer scope are sent to the EC2 backend on every Policy Agent request.
 
 ## Validate
 

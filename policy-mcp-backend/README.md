@@ -36,6 +36,8 @@ Role access:
 - `supervisor`: review access across customers and claim submission.
 - `admin`: full access, including policy creation.
 
+Seed data includes 10 fictional policy holder profiles with fake phone, address, SSN, passport, income, and family member values. Demo login accounts include 10 consumers, 3 supervisors, and 1 admin. The SSN/passport values are intentionally fake demo identifiers.
+
 ## Run MCP stdio Server
 
 ```bash

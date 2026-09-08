@@ -4,7 +4,26 @@ In a real application, this would use a database
 """
 
 from datetime import datetime
-from types_import import Policy, CoverageOption, Claim, CreatePolicyInput, SubmitClaimInput
+try:
+    from .types_import import (
+        AgentLogin,
+        Claim,
+        CoverageOption,
+        CreatePolicyInput,
+        Policy,
+        PolicyHolder,
+        SubmitClaimInput,
+    )
+except ImportError:
+    from types_import import (
+        AgentLogin,
+        Claim,
+        CoverageOption,
+        CreatePolicyInput,
+        Policy,
+        PolicyHolder,
+        SubmitClaimInput,
+    )
 
 
 class PolicyStore:
@@ -14,12 +33,46 @@ class PolicyStore:
         self.policies: dict[str, Policy] = {}
         self.claims: dict[str, Claim] = {}
         self.coverage_options: dict[str, CoverageOption] = {}
+        self.policy_holders: dict[str, PolicyHolder] = {}
+        self.agent_logins: dict[str, AgentLogin] = {}
         self.policy_id_counter = 1000
         self.claim_id_counter = 5000
         self._initialize_sample_data()
 
     def _initialize_sample_data(self) -> None:
         """Initialize store with sample data"""
+        policy_holders = [
+            PolicyHolder("CUST-001", "Avery Johnson", "555-0101", "101 Maple Street, Sacramento, CA 95814", "FAKE-SSN-1001", "FAKE-PASS-A1001", 82000, 3),
+            PolicyHolder("CUST-002", "Morgan Lee", "555-0102", "220 Oak Avenue, San Diego, CA 92101", "FAKE-SSN-1002", "FAKE-PASS-A1002", 104000, 4),
+            PolicyHolder("CUST-003", "Jordan Smith", "555-0103", "315 Pine Road, Fresno, CA 93721", "FAKE-SSN-1003", "FAKE-PASS-A1003", 67000, 2),
+            PolicyHolder("CUST-004", "Priya Raman", "555-0104", "48 Cedar Lane, Irvine, CA 92602", "FAKE-SSN-1004", "FAKE-PASS-A1004", 128000, 4),
+            PolicyHolder("CUST-005", "Carlos Rivera", "555-0105", "780 Mission Drive, San Jose, CA 95112", "FAKE-SSN-1005", "FAKE-PASS-A1005", 93000, 5),
+            PolicyHolder("CUST-006", "Taylor Brown", "555-0106", "19 Sunset Court, Oakland, CA 94607", "FAKE-SSN-1006", "FAKE-PASS-A1006", 76000, 1),
+            PolicyHolder("CUST-007", "Nina Patel", "555-0107", "402 Valley Way, Pasadena, CA 91101", "FAKE-SSN-1007", "FAKE-PASS-A1007", 116000, 3),
+            PolicyHolder("CUST-008", "Ethan Wilson", "555-0108", "909 Harbor Boulevard, Long Beach, CA 90802", "FAKE-SSN-1008", "FAKE-PASS-A1008", 59000, 2),
+            PolicyHolder("CUST-009", "Sophia Chen", "555-0109", "67 Sierra Place, Santa Clara, CA 95050", "FAKE-SSN-1009", "FAKE-PASS-A1009", 141000, 4),
+            PolicyHolder("CUST-010", "Marcus Davis", "555-0110", "125 Redwood Terrace, Los Angeles, CA 90012", "FAKE-SSN-1010", "FAKE-PASS-A1010", 88000, 3),
+        ]
+
+        for holder in policy_holders:
+            self.policy_holders[holder.customer_id] = holder
+
+        agent_logins = [
+            AgentLogin(f"consumer{index:02d}", "consumer", holder.name, holder.customer_id)
+            for index, holder in enumerate(policy_holders, start=1)
+        ]
+        agent_logins.extend(
+            [
+                AgentLogin("supervisor01", "supervisor", "Dana Brooks"),
+                AgentLogin("supervisor02", "supervisor", "Riley Foster"),
+                AgentLogin("supervisor03", "supervisor", "Casey Nguyen"),
+                AgentLogin("admin01", "admin", "System Administrator"),
+            ]
+        )
+
+        for login in agent_logins:
+            self.agent_logins[login.username] = login
+
         # Sample coverage options
         coverage_options = [
             CoverageOption(
@@ -125,6 +178,21 @@ class PolicyStore:
     def get_policy(self, policy_id: str) -> Policy | None:
         """Get a policy by ID"""
         return self.policies.get(policy_id)
+
+    def get_policy_holder(self, customer_id: str) -> PolicyHolder | None:
+        """Get a fictional policy holder by customer ID"""
+        return self.policy_holders.get(customer_id)
+
+    def list_policy_holders(self) -> list[PolicyHolder]:
+        """List all fictional policy holders sorted by customer ID"""
+        return sorted(self.policy_holders.values(), key=lambda holder: holder.customer_id)
+
+    def list_agent_logins(self, role: str | None = None) -> list[AgentLogin]:
+        """List demo Policy Agent login accounts, optionally filtered by role"""
+        logins = list(self.agent_logins.values())
+        if role:
+            logins = [login for login in logins if login.role == role]
+        return sorted(logins, key=lambda login: login.username)
 
     def list_policies(self, customer_id: str | None = None) -> list[Policy]:
         """List all policies, optionally filtered by customer, in reverse chronological order"""

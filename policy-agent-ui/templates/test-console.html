@@ -31,22 +31,25 @@
                 </div>
                 <div class="role-options">
                     <label class="role-card">
-                        <input type="radio" name="agentRole" value="consumer" checked>
+                        <input type="radio" name="agentRole" value="consumer" checked onchange="populateLoginSelect()">
                         <span class="role-title">Consumer</span>
-                        <span class="role-description">View own policies, view own claims, submit claims.</span>
+                        <span class="role-description">10 demo logins. View own profile, policies, claims, and submit claims.</span>
                     </label>
                     <label class="role-card">
-                        <input type="radio" name="agentRole" value="supervisor">
+                        <input type="radio" name="agentRole" value="supervisor" onchange="populateLoginSelect()">
                         <span class="role-title">Supervisor</span>
-                        <span class="role-description">Review policies, claims, and coverage options across customers.</span>
+                        <span class="role-description">3 demo logins. Review policy holder, policy, claim, and coverage data.</span>
                     </label>
                     <label class="role-card">
-                        <input type="radio" name="agentRole" value="admin">
+                        <input type="radio" name="agentRole" value="admin" onchange="populateLoginSelect()">
                         <span class="role-title">Admin</span>
-                        <span class="role-description">Full MCP access, including creating new policies.</span>
+                        <span class="role-description">1 demo login. Full MCP access, including policies and login inventory.</span>
                     </label>
                 </div>
                 <div class="role-login-actions">
+                    <select id="loginSelector" class="input-field" onchange="handleLoginSelection()">
+                        <option value="">Loading demo logins...</option>
+                    </select>
                     <input type="text" id="customerScope" class="input-field" value="CUST-001" placeholder="Customer ID for consumer access">
                     <button onclick="loginAgent()" class="btn btn-primary">Login to Policy Agent</button>
                     <button onclick="logoutAgent()" class="btn btn-secondary">Logout</button>
