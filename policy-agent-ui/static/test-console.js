@@ -226,7 +226,11 @@ function loginAgent() {
         return;
     }
     verifyConnection();
-    loadCoverageCatalog();
+    if (connectionMode === "direct") {
+        loadCoverageCatalog();
+    } else {
+        coverageCatalog = [];
+    }
     loadTools();
 }
 

@@ -405,25 +405,60 @@ def agent_connection_check():
         f"[CONFIG] Selected route: {route_label}",
         f"[CONFIG] Selected route URL: {base_url}",
         f"[CONFIG] Selected route host/IP: {backend_host}",
-        f"[AUTH] Agent role: {agent_role}",
-        "[CHECK] Calling selected route /health endpoint...",
+        f"[AUTH] Local UI login role: {agent_role}",
     ]
     if agent_username:
-        logs.append(f"[AUTH] Agent login: {agent_username}")
+        logs.append(f"[AUTH] Local UI login: {agent_username}")
     if agent_customer_id:
         logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
+
+    if mode == "mcp_gateway":
+        rpc_payload, status, gateway_logs = mcp_gateway_rpc("tools/list")
+        tools = normalize_mcp_tools(rpc_payload) if status < 400 else []
+        logs.append("[CHECK] Calling MCP Gateway tools/list with YAML credentials only")
+        logs.append("[AUTH] Consumer/supervisor/admin headers are not forwarded to MCP Gateway")
+        logs.extend(gateway_logs)
+        connected = status < 400
+        if connected:
+            logs.append(f"[SUCCESS] MCP Gateway returned {len(tools)} gateway action items")
+        else:
+            logs.append(f"[ERROR] MCP Gateway rejected tools/list with HTTP {status}")
+
+        return jsonify(
+            {
+                "connected": connected,
+                "route_mode": mode,
+                "route_label": route_label,
+                "backend_url": base_url,
+                "backend_host": backend_host,
+                "mcp_gateway": {
+                    "configured": True,
+                    "connected": connected,
+                    "reachable": status != 502,
+                    "url": MCP_GATEWAY_URL,
+                    "host": backend_host,
+                    "status_code": status,
+                    "headers_configured": any(
+                        "Credential headers configured: none" not in log for log in gateway_logs
+                    ),
+                    "logs": gateway_logs,
+                    "error": rpc_payload.get("error") if isinstance(rpc_payload, dict) else None,
+                },
+                "health": None,
+                "tool_count": len(tools),
+                "role": agent_role,
+                "customer_id": agent_customer_id,
+                "logs": logs,
+                "error": None if connected else rpc_payload.get("error", "MCP Gateway rejected request"),
+            }
+        ), 200 if connected else status
 
     try:
         active_headers = {"Accept": "application/json"}
         gateway = None
-        if mode == "mcp_gateway":
-            gateway = check_mcp_gateway()
-            active_headers, _, gateway_config_logs = load_gateway_headers()
-            logs.extend(gateway_config_logs)
         ssl_context = None
-        if mode == "mcp_gateway" and not MCP_GATEWAY_VERIFY_SSL:
-            ssl_context = ssl._create_unverified_context()
 
+        logs.append("[CHECK] Calling selected route /health endpoint...")
         health_request = Request(f"{base_url}/health", headers=active_headers)
         with urlopen(health_request, timeout=10, context=ssl_context) as health_response:
             health = json.loads(health_response.read().decode("utf-8"))
