@@ -299,7 +299,7 @@ function createInputForm() {
 function getInputElement(paramName, paramType) {
     if (paramType.includes("array")) {
         return `<textarea id="param_${paramName}" placeholder="[&quot;option1&quot;, &quot;option2&quot;]"></textarea>`;
-    } else if (paramType === "number") {
+    } else if (paramType.startsWith("number")) {
         return `<input type="number" id="param_${paramName}" step="0.01" placeholder="0">`;
     } else if (paramType.includes("|")) {
         const options = paramType.split("|").map(opt => opt.trim());
@@ -351,11 +351,13 @@ async function executeAgent() {
                 }
             }
             // Parse numbers
-            else if (currentTool.params[paramName] === "number") {
-                value = value ? parseFloat(value) : 0;
+            else if (currentTool.params[paramName].startsWith("number")) {
+                value = value ? parseFloat(value) : undefined;
             }
 
-            params[paramName] = value;
+            if (value !== undefined) {
+                params[paramName] = value;
+            }
         }
     });
 

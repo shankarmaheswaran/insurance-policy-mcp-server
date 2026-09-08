@@ -151,6 +151,65 @@ class TestPolicyStore:
         assert len(store.list_agent_logins("admin")) == 1
         assert len(store.list_agent_logins()) == 14
 
+    def test_each_policy_holder_has_policy(self, store: PolicyStore) -> None:
+        """Test every seeded policy holder has at least one policy"""
+        for holder in store.list_policy_holders():
+            assert len(store.list_policies(holder.customer_id)) >= 1
+
+    def test_create_policy_does_not_overwrite_seeded_policy(self, store: PolicyStore) -> None:
+        """Test policy creation appends after seeded policies"""
+        before_count = len(store.list_policies())
+        policy = store.create_policy(
+            CreatePolicyInput(
+                customer_id="CUST-001",
+                policy_type="life",
+                start_date="2025-01-01",
+                end_date="2026-01-01",
+                premium=900,
+                coverage_options=[],
+                deductible=0,
+                policy_limit=250000,
+            )
+        )
+
+        assert len(store.list_policies()) == before_count + 1
+        assert policy.id == "POL-1010"
+        assert store.get_policy("POL-1000") is not None
+
+    def test_update_policy(self, store: PolicyStore) -> None:
+        """Test updating editable policy fields"""
+        policy = store.update_policy(
+            "POL-1000",
+            {
+                "premium": 1300,
+                "deductible": 750,
+                "policy_limit": 125000,
+                "coverage_options": ["cov-001"],
+            },
+        )
+
+        assert policy is not None
+        assert policy.premium == 1300
+        assert policy.deductible == 750
+        assert policy.policy_limit == 125000
+        assert policy.coverage_options == ["cov-001"]
+
+    def test_renew_policy(self, store: PolicyStore) -> None:
+        """Test renewing a policy"""
+        policy = store.renew_policy("POL-1000", "2026-01-01", 1400)
+
+        assert policy is not None
+        assert policy.end_date == "2026-01-01"
+        assert policy.premium == 1400
+        assert policy.status == "active"
+
+    def test_change_policy_status(self, store: PolicyStore) -> None:
+        """Test changing policy status"""
+        policy = store.change_policy_status("POL-1000", "inactive")
+
+        assert policy is not None
+        assert policy.status == "inactive"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -112,35 +112,23 @@ class PolicyStore:
         for opt in coverage_options:
             self.coverage_options[opt.id] = opt
 
-        # Sample policies
-        policy1 = Policy(
-            id="POL-1000",
-            customer_id="CUST-001",
-            policy_type="auto",
-            start_date="2024-01-01",
-            end_date="2025-01-01",
-            premium=1200,
-            status="active",
-            coverage_options=["cov-001", "cov-002"],
-            deductible=500,
-            policy_limit=100000,
-        )
+        # Sample policies: every seeded customer has at least one policy.
+        policies = [
+            Policy("POL-1000", "CUST-001", "auto", "2024-01-01", "2025-01-01", 1200, "active", ["cov-001", "cov-002"], 500, 100000),
+            Policy("POL-1001", "CUST-002", "home", "2024-03-15", "2025-03-15", 1800, "active", ["cov-003"], 1000, 500000),
+            Policy("POL-1002", "CUST-003", "health", "2024-04-01", "2025-04-01", 950, "active", ["cov-004"], 250, 100000),
+            Policy("POL-1003", "CUST-004", "life", "2024-05-01", "2025-05-01", 1100, "active", [], 0, 300000),
+            Policy("POL-1004", "CUST-005", "auto", "2024-06-01", "2025-06-01", 1350, "active", ["cov-001"], 750, 125000),
+            Policy("POL-1005", "CUST-006", "home", "2024-07-01", "2025-07-01", 1600, "active", ["cov-003"], 1200, 450000),
+            Policy("POL-1006", "CUST-007", "health", "2024-08-01", "2025-08-01", 1025, "active", ["cov-004"], 300, 125000),
+            Policy("POL-1007", "CUST-008", "life", "2024-09-01", "2025-09-01", 875, "active", [], 0, 200000),
+            Policy("POL-1008", "CUST-009", "auto", "2024-10-01", "2025-10-01", 1450, "active", ["cov-001", "cov-002"], 500, 150000),
+            Policy("POL-1009", "CUST-010", "home", "2024-11-01", "2025-11-01", 1725, "active", ["cov-003"], 1000, 550000),
+        ]
 
-        policy2 = Policy(
-            id="POL-1001",
-            customer_id="CUST-002",
-            policy_type="home",
-            start_date="2024-03-15",
-            end_date="2025-03-15",
-            premium=1800,
-            status="active",
-            coverage_options=["cov-003"],
-            deductible=1000,
-            policy_limit=500000,
-        )
-
-        self.policies[policy1.id] = policy1
-        self.policies[policy2.id] = policy2
+        for policy in policies:
+            self.policies[policy.id] = policy
+        self.policy_id_counter = 1010
 
         # Sample claims
         claim1 = Claim(
@@ -173,6 +161,50 @@ class PolicyStore:
             policy_limit=input_data.policy_limit,
         )
         self.policies[policy_id] = policy
+        return policy
+
+    def update_policy(self, policy_id: str, updates: dict) -> Policy | None:
+        """Update editable policy fields"""
+        policy = self.policies.get(policy_id)
+        if not policy:
+            return None
+
+        editable_fields = {
+            "policy_type",
+            "start_date",
+            "end_date",
+            "premium",
+            "coverage_options",
+            "deductible",
+            "policy_limit",
+        }
+        for field_name, value in updates.items():
+            if field_name in editable_fields:
+                setattr(policy, field_name, value)
+        return policy
+
+    def renew_policy(self, policy_id: str, end_date: str, premium: float | None = None) -> Policy | None:
+        """Renew a policy by extending its end date and keeping it active"""
+        policy = self.policies.get(policy_id)
+        if not policy:
+            return None
+
+        policy.end_date = end_date
+        if premium is not None:
+            policy.premium = premium
+        policy.status = "active"
+        return policy
+
+    def change_policy_status(self, policy_id: str, status: str) -> Policy | None:
+        """Change policy status to an allowed non-delete state"""
+        if status not in {"active", "inactive", "cancelled"}:
+            raise ValueError("Invalid policy status")
+
+        policy = self.policies.get(policy_id)
+        if not policy:
+            return None
+
+        policy.status = status
         return policy
 
     def get_policy(self, policy_id: str) -> Policy | None:

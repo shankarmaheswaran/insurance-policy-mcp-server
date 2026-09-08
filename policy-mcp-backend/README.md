@@ -35,11 +35,11 @@ Protected agent endpoints require both `X-Policy-Agent-Username` and `X-Policy-A
 
 Role access:
 
-- `consumer`: own policy/claim access and claim submission for owned policies.
-- `supervisor`: review access across customers and claim submission.
-- `admin`: full access, including policy creation.
+- `consumer`: read-only access to own policy holder profile, policies, claims, and coverage options.
+- `supervisor`: review access across customers, plus policy creation for consumers, allowed policy edits, renewal, policy status changes, and claim submission. No delete capability is exposed.
+- `admin`: full non-delete demo access, including policy maintenance and login inventory.
 
-Seed data includes 10 fictional policy holder profiles with fake phone, address, SSN, passport, income, and family member values. Demo login accounts include 10 consumers, 3 supervisors, and 1 admin. The SSN/passport values are intentionally fake demo identifiers.
+Seed data includes 10 fictional policy holder profiles with fake phone, address, SSN, passport, income, and family member values. Every seeded customer has at least one policy, and customers can have more than one policy. Demo login accounts include 10 consumers, 3 supervisors, and 1 admin. The SSN/passport values are intentionally fake demo identifiers.
 
 ## Run MCP stdio Server
 

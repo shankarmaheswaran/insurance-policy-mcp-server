@@ -17,7 +17,7 @@ AGENT_TOOLS = [
     {
         "name": "create_policy",
         "description": "Create a new insurance policy",
-        "allowed_roles": ["admin"],
+        "allowed_roles": ["supervisor", "admin"],
         "params": {
             "customer_id": "string",
             "policy_type": "auto|home|health|life",
@@ -50,7 +50,7 @@ AGENT_TOOLS = [
     {
         "name": "submit_claim",
         "description": "Submit a claim",
-        "allowed_roles": ["consumer", "supervisor", "admin"],
+        "allowed_roles": ["supervisor", "admin"],
         "params": {
             "policy_id": "string",
             "claim_type": "string",
@@ -63,6 +63,36 @@ AGENT_TOOLS = [
         "description": "List claims visible to the signed-in role",
         "allowed_roles": ["consumer", "supervisor", "admin"],
         "params": {"policy_id": "string (optional)"},
+    },
+    {
+        "name": "update_policy",
+        "description": "Edit allowed policy fields for a consumer policy",
+        "allowed_roles": ["supervisor", "admin"],
+        "params": {
+            "policy_id": "string",
+            "premium": "number (optional)",
+            "deductible": "number (optional)",
+            "policy_limit": "number (optional)",
+            "coverage_options": "array of strings (optional)",
+            "start_date": "YYYY-MM-DD (optional)",
+            "end_date": "YYYY-MM-DD (optional)",
+        },
+    },
+    {
+        "name": "renew_policy",
+        "description": "Renew a policy by extending its end date",
+        "allowed_roles": ["supervisor", "admin"],
+        "params": {
+            "policy_id": "string",
+            "end_date": "YYYY-MM-DD",
+            "premium": "number (optional)",
+        },
+    },
+    {
+        "name": "change_policy_status",
+        "description": "Change a policy status without deleting it",
+        "allowed_roles": ["supervisor", "admin"],
+        "params": {"policy_id": "string", "status": "active|inactive|cancelled"},
     },
     {
         "name": "get_policy_holder",
@@ -89,7 +119,6 @@ ROLE_PERMISSIONS = {
         "get_policy",
         "list_policies",
         "get_coverage_options",
-        "submit_claim",
         "list_claims",
         "get_policy_holder",
         "list_policy_holders",
@@ -100,6 +129,10 @@ ROLE_PERMISSIONS = {
         "get_coverage_options",
         "submit_claim",
         "list_claims",
+        "create_policy",
+        "update_policy",
+        "renew_policy",
+        "change_policy_status",
         "get_policy_holder",
         "list_policy_holders",
     },
@@ -172,6 +205,8 @@ def create_policy():
     """Create a new policy."""
     try:
         data = request.json or {}
+        if not store.get_policy_holder(data["customer_id"]):
+            return jsonify({"error": f"Customer not found: {data['customer_id']}"}), 400
         input_data = CreatePolicyInput(
             customer_id=data["customer_id"],
             policy_type=data["policy_type"],
@@ -271,6 +306,8 @@ def agent_execute_tool():
         result = None
         if tool_name == "create_policy":
             logs.append("[EXECUTING] Creating new policy...")
+            if not store.get_policy_holder(tool_params["customer_id"]):
+                return error_result(f"Customer not found: {tool_params['customer_id']}", logs, 400)
             input_data = CreatePolicyInput(
                 customer_id=tool_params["customer_id"],
                 policy_type=tool_params["policy_type"],
@@ -332,6 +369,51 @@ def agent_execute_tool():
             claim = store.submit_claim(input_data)
             result = claim.__dict__
             logs.append(f"[SUCCESS] Claim submitted with ID: {claim.id}")
+
+        elif tool_name == "update_policy":
+            logs.append("[EXECUTING] Updating policy...")
+            editable_updates = {}
+            for field_name in (
+                "policy_type",
+                "start_date",
+                "end_date",
+                "premium",
+                "coverage_options",
+                "deductible",
+                "policy_limit",
+            ):
+                if field_name in tool_params and tool_params[field_name] not in ("", None):
+                    editable_updates[field_name] = tool_params[field_name]
+            for number_field in ("premium", "deductible", "policy_limit"):
+                if number_field in editable_updates:
+                    editable_updates[number_field] = float(editable_updates[number_field])
+
+            policy = store.update_policy(tool_params["policy_id"], editable_updates)
+            if not policy:
+                return error_result(f"Policy not found: {tool_params['policy_id']}", logs, 404)
+            result = policy.__dict__
+            logs.append(f"[SUCCESS] Policy updated: {policy.id}")
+
+        elif tool_name == "renew_policy":
+            logs.append("[EXECUTING] Renewing policy...")
+            premium = tool_params.get("premium")
+            policy = store.renew_policy(
+                tool_params["policy_id"],
+                tool_params["end_date"],
+                float(premium) if premium not in (None, "") else None,
+            )
+            if not policy:
+                return error_result(f"Policy not found: {tool_params['policy_id']}", logs, 404)
+            result = policy.__dict__
+            logs.append(f"[SUCCESS] Policy renewed through {policy.end_date}")
+
+        elif tool_name == "change_policy_status":
+            logs.append("[EXECUTING] Changing policy status...")
+            policy = store.change_policy_status(tool_params["policy_id"], tool_params["status"])
+            if not policy:
+                return error_result(f"Policy not found: {tool_params['policy_id']}", logs, 404)
+            result = policy.__dict__
+            logs.append(f"[SUCCESS] Policy status changed to {policy.status}")
 
         elif tool_name == "list_claims":
             logs.append("[EXECUTING] Listing claims...")

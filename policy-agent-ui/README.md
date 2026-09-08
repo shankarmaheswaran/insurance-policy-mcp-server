@@ -20,9 +20,9 @@ Open:
 
 The Policy Agent login supports three demo roles:
 
-- `consumer`: can view policies and claims for the selected customer scope, view coverage options, and submit claims for owned policies.
-- `supervisor`: can review policies, claims, and coverage options across customers, and submit claims.
-- `admin`: has full access, including creating new policies.
+- `consumer`: can view only their own policy holder profile, policies, claims, and coverage options. Consumers cannot create, edit, renew, change, delete, or submit policy-changing actions.
+- `supervisor`: can review policies, claims, holder profiles, and coverage options across customers. Supervisors can create policies for consumers, edit allowed policy fields, renew policies, change policy status, and submit claims. They cannot delete policies or accounts.
+- `admin`: has full non-delete demo access, including policy maintenance and login inventory.
 
 The login picker loads 10 consumer accounts, 3 supervisor accounts, and 1 admin account from the EC2 backend. The selected role and customer scope are sent to the EC2 backend on every Policy Agent request.
 
