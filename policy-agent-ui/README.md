@@ -11,21 +11,18 @@ pip install -r requirements.txt
 POLICY_BACKEND_URL=http://<ec2-public-ip-or-dns>:5000 python3 app.py
 ```
 
-To also validate a Palo Alto / Portkey MCP AI Gateway from the agent connection panel, set the gateway URL and optional local YAML credential file path:
+To validate a Palo Alto / Portkey MCP AI Gateway from the agent connection panel, set the gateway URL:
 
 ```bash
 POLICY_BACKEND_URL=http://<ec2-public-ip-or-dns>:5000 \
 MCP_GATEWAY_URL=https://mcp-aigw.portkey.ai/insurance-mcp/mcp \
-MCP_GATEWAY_CONFIG_FILE=/path/to/gateway-creds.yaml \
 python3 app.py
 ```
 
-The agent reads the YAML file locally and never prints credential values. The connection panel only shows credential header names and gateway HTTP status.
+MCP Gateway mode uses the MCP server username/password entered in the UI and sends them as normal MCP server headers. It does not use a gateway credential file.
 
 Optional gateway settings:
 
-- `MCP_GATEWAY_TEST_PATH`: test path appended to `MCP_GATEWAY_URL`. Defaults to `/`.
-- `MCP_GATEWAY_YAML_AUTH_HEADER`: header name used for `environment.data.PORTKEY_CLIENT_AUTH` from the YAML. Defaults to `Authorization` with a bearer token.
 - `MCP_GATEWAY_VERIFY_SSL`: set to `0` only for local POC testing when Python cannot verify the gateway certificate chain.
 
 Open:

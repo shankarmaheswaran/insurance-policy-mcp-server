@@ -19,8 +19,6 @@ BACKEND_URL = os.getenv("POLICY_BACKEND_URL", "").rstrip("/")
 MCP_GATEWAY_URL = os.getenv(
     "MCP_GATEWAY_URL", "https://mcp-aigw.portkey.ai/insurance-mcp/mcp"
 ).rstrip("/")
-MCP_GATEWAY_CONFIG_FILE = os.getenv("MCP_GATEWAY_CONFIG_FILE", "")
-MCP_GATEWAY_TEST_PATH = os.getenv("MCP_GATEWAY_TEST_PATH", "/")
 MCP_GATEWAY_VERIFY_SSL = os.getenv("MCP_GATEWAY_VERIFY_SSL", "1") != "0"
 
 
@@ -55,127 +53,6 @@ def require_target_url(base_url: str, mode: str):
     return jsonify({"error": f"{setting_name} is not configured for {mode} mode."}), 500
 
 
-def load_gateway_headers() -> tuple[dict[str, str], list[str], list[str]]:
-    """Load MCP gateway headers from env/YAML without exposing secret values."""
-    headers: dict[str, str] = {"Accept": "application/json"}
-    header_names: list[str] = []
-    logs: list[str] = []
-
-    headers_json = os.getenv("MCP_GATEWAY_HEADERS_JSON")
-    if headers_json:
-        try:
-            parsed_headers = json.loads(headers_json)
-            for name, value in parsed_headers.items():
-                if value:
-                    headers[str(name)] = str(value)
-                    header_names.append(str(name))
-            logs.append("[CONFIG] Loaded MCP gateway headers from MCP_GATEWAY_HEADERS_JSON")
-        except json.JSONDecodeError:
-            logs.append("[WARNING] MCP_GATEWAY_HEADERS_JSON is not valid JSON")
-
-    auth_name = os.getenv("MCP_GATEWAY_AUTH_HEADER_NAME")
-    auth_value = os.getenv("MCP_GATEWAY_AUTH_HEADER_VALUE")
-    if auth_name and auth_value:
-        headers[auth_name] = auth_value
-        header_names.append(auth_name)
-        logs.append("[CONFIG] Loaded MCP gateway auth header from environment")
-
-    if MCP_GATEWAY_CONFIG_FILE:
-        try:
-            import yaml
-        except ImportError:
-            logs.append("[WARNING] PyYAML is not installed; YAML gateway config was not loaded")
-        else:
-            try:
-                with open(MCP_GATEWAY_CONFIG_FILE, "r", encoding="utf-8") as config_file:
-                    config = yaml.safe_load(config_file) or {}
-                yaml_headers = config.get("headers", {}) if isinstance(config, dict) else {}
-                if isinstance(yaml_headers, dict):
-                    for name, value in yaml_headers.items():
-                        if value:
-                            headers[str(name)] = str(value)
-                            header_names.append(str(name))
-                for key in ("api_key", "portkey_api_key", "virtual_key", "bearer_token"):
-                    value = config.get(key) if isinstance(config, dict) else None
-                    if value and key not in header_names:
-                        header_name = "Authorization" if key == "bearer_token" else f"X-{key.replace('_', '-')}"
-                        header_value = f"Bearer {value}" if key == "bearer_token" else str(value)
-                        headers[header_name] = header_value
-                        header_names.append(header_name)
-                environment_data = config.get("environment", {}).get("data", {}) if isinstance(config, dict) else {}
-                client_auth = environment_data.get("PORTKEY_CLIENT_AUTH") if isinstance(environment_data, dict) else None
-                if client_auth:
-                    auth_header_name = os.getenv("MCP_GATEWAY_YAML_AUTH_HEADER", "Authorization")
-                    auth_header_value = (
-                        str(client_auth)
-                        if auth_header_name.lower() != "authorization"
-                        else f"Bearer {client_auth}"
-                    )
-                    headers[auth_header_name] = auth_header_value
-                    header_names.append(auth_header_name)
-                logs.append("[CONFIG] Loaded MCP gateway YAML config file")
-            except OSError as error:
-                logs.append(f"[WARNING] Could not read MCP gateway YAML config file: {error.strerror}")
-
-    return headers, sorted(set(header_names)), logs
-
-
-def check_mcp_gateway() -> dict:
-    """Check the configured MCP gateway URL without logging secrets."""
-    gateway_url = f"{MCP_GATEWAY_URL}{MCP_GATEWAY_TEST_PATH}"
-    gateway_host = urlparse(MCP_GATEWAY_URL).hostname or MCP_GATEWAY_URL
-    headers, header_names, logs = load_gateway_headers()
-    logs.insert(0, f"[CONFIG] MCP Gateway URL: {MCP_GATEWAY_URL}")
-    logs.append(f"[CONFIG] MCP Gateway host: {gateway_host}")
-    logs.append(f"[CONFIG] Credential headers configured: {', '.join(header_names) if header_names else 'none'}")
-    logs.append(f"[CONFIG] TLS certificate verification: {'enabled' if MCP_GATEWAY_VERIFY_SSL else 'disabled for local test'}")
-    logs.append(f"[CHECK] Calling MCP gateway test endpoint: {gateway_url}")
-
-    try:
-        gateway_request = Request(gateway_url, headers=headers, method="GET")
-        ssl_context = None if MCP_GATEWAY_VERIFY_SSL else ssl._create_unverified_context()
-        with urlopen(gateway_request, timeout=15, context=ssl_context) as response:
-            logs.append(f"[SUCCESS] MCP gateway returned HTTP {response.status}")
-            return {
-                "configured": True,
-                "connected": 200 <= response.status < 300,
-                "reachable": True,
-                "url": MCP_GATEWAY_URL,
-                "host": gateway_host,
-                "status_code": response.status,
-                "headers_configured": bool(header_names),
-                "header_names": header_names,
-                "logs": logs,
-            }
-    except HTTPError as error:
-        logs.append(f"[WARNING] MCP gateway reached but returned HTTP {error.code}: {error.reason}")
-        return {
-            "configured": True,
-            "connected": False,
-            "reachable": True,
-            "url": MCP_GATEWAY_URL,
-            "host": gateway_host,
-            "status_code": error.code,
-            "headers_configured": bool(header_names),
-            "header_names": header_names,
-            "logs": logs,
-            "error": error.reason,
-        }
-    except URLError as error:
-        logs.append(f"[ERROR] MCP gateway unavailable: {error.reason}")
-        return {
-            "configured": True,
-            "connected": False,
-            "reachable": False,
-            "url": MCP_GATEWAY_URL,
-            "host": gateway_host,
-            "headers_configured": bool(header_names),
-            "header_names": header_names,
-            "logs": logs,
-            "error": str(error.reason),
-        }
-
-
 def read_gateway_json(response) -> dict:
     """Read JSON or simple SSE data JSON from an MCP gateway response."""
     response_text = response.read().decode("utf-8")
@@ -208,19 +85,19 @@ def mcp_gateway_rpc(
     extra_headers: dict[str, str] | None = None,
 ) -> tuple[dict, int, list[str]]:
     """Call the configured MCP gateway using MCP JSON-RPC over HTTP."""
-    headers, header_names, logs = load_gateway_headers()
-    headers.update(
-        {
-            "Accept": "application/json, text/event-stream",
-            "Content-Type": "application/json",
-        }
-    )
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+    }
+    logs: list[str] = []
     if extra_headers:
         headers.update(extra_headers)
     logs.append(f"[CONFIG] MCP Gateway URL: {MCP_GATEWAY_URL}")
-    logs.append(f"[CONFIG] Credential headers configured: {', '.join(header_names) if header_names else 'none'}")
     if extra_headers:
         logs.append(f"[CONFIG] MCP server login headers included: {', '.join(extra_headers.keys())}")
+    else:
+        logs.append("[CONFIG] MCP server login headers included: none")
+    logs.append("[AUTH] No gateway credential file is used for MCP Gateway mode")
     logs.append(f"[MCP] JSON-RPC method: {method}")
 
     body = json.dumps(
@@ -334,9 +211,6 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
 
     body = None
     headers = {"Accept": "application/json"}
-    gateway_logs: list[str] = []
-    if mode == "mcp_gateway":
-        headers, _, gateway_logs = load_gateway_headers()
     agent_role = request.headers.get("X-Policy-Agent-Role")
     agent_username = request.headers.get("X-Policy-Agent-Username")
     agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
@@ -368,7 +242,6 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
         if mode == "mcp_gateway" and isinstance(response_body, dict):
             response_body.setdefault("route_mode", mode)
             response_body.setdefault("route_url", base_url)
-            response_body.setdefault("gateway_logs", gateway_logs)
         return jsonify(response_body), error.code
     except URLError as error:
         route_name = "MCP gateway" if mode == "mcp_gateway" else "Backend"
@@ -377,7 +250,6 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
                 "error": f"{route_name} unavailable: {error.reason}",
                 "route_mode": mode,
                 "route_url": base_url,
-                "gateway_logs": gateway_logs,
             }
         ), 502
 
@@ -435,7 +307,7 @@ def agent_connection_check():
             "tools/list", extra_headers=get_mcp_server_headers()
         )
         tools = normalize_mcp_tools(rpc_payload) if status < 400 else []
-        logs.append("[CHECK] Calling MCP Gateway tools/list with YAML credentials only")
+        logs.append("[CHECK] Calling MCP Gateway tools/list with MCP server username/password headers")
         logs.append("[AUTH] Consumer/supervisor/admin headers are not forwarded to MCP Gateway")
         logs.extend(gateway_logs)
         connected = status < 400
@@ -458,9 +330,7 @@ def agent_connection_check():
                     "url": MCP_GATEWAY_URL,
                     "host": backend_host,
                     "status_code": status,
-                    "headers_configured": any(
-                        "Credential headers configured: none" not in log for log in gateway_logs
-                    ),
+                    "headers_configured": bool(get_mcp_server_headers()),
                     "logs": gateway_logs,
                     "error": rpc_payload.get("error") if isinstance(rpc_payload, dict) else None,
                 },
@@ -557,14 +427,14 @@ def agent_connection_check():
 
 @app.route("/api/agent/gateway-preflight", methods=["GET"])
 def agent_gateway_preflight():
-    """Establish MCP Gateway connectivity with YAML credentials before UI login."""
+    """Check MCP Gateway connectivity before UI login."""
     rpc_payload, status, gateway_logs = mcp_gateway_rpc("tools/list")
     tools = normalize_mcp_tools(rpc_payload) if status < 400 else []
     connected = status < 400
     logs = [
         "[FLOW] Pre-login MCP Gateway connection check",
-        "[AUTH] Using YAML gateway credentials only",
-        "[AUTH] Consumer/supervisor/admin credentials are not used for this step",
+        "[AUTH] MCP Gateway uses MCP server username/password headers only",
+        "[AUTH] MCP server username/password is used in the MCP Server Login step",
     ]
     logs.extend(gateway_logs)
     logs.append(
@@ -602,8 +472,8 @@ def agent_mcp_login():
                 "route_url": MCP_GATEWAY_URL,
                 "logs": [
                     "[FLOW] MCP server login through MCP Gateway",
-                    "[AUTH] YAML gateway credentials used for gateway access",
-                    "[AUTH] MCP server login headers included for upstream MCP server",
+                    "[AUTH] MCP Gateway uses MCP server username/password headers only",
+                    "[AUTH] MCP server username/password headers sent to MCP Gateway",
                 ] + logs,
                 "error": None if authenticated else rpc_payload.get("error", "MCP Gateway rejected MCP server login"),
             }
