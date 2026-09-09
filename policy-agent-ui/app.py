@@ -19,7 +19,24 @@ BACKEND_URL = os.getenv("POLICY_BACKEND_URL", "").rstrip("/")
 MCP_GATEWAY_URL = os.getenv(
     "MCP_GATEWAY_URL", "https://mcp-aigw.portkey.ai/insurance-mcp/mcp"
 ).rstrip("/")
+MCP_GATEWAY_CONFIG_FILE = os.getenv("MCP_GATEWAY_CONFIG_FILE", "")
 MCP_GATEWAY_VERIFY_SSL = os.getenv("MCP_GATEWAY_VERIFY_SSL", "1") != "0"
+DEMO_AGENT_LOGINS = [
+    {"username": "consumer01", "role": "consumer", "display_name": "Avery Johnson"},
+    {"username": "consumer02", "role": "consumer", "display_name": "Morgan Lee"},
+    {"username": "consumer03", "role": "consumer", "display_name": "Jordan Smith"},
+    {"username": "consumer04", "role": "consumer", "display_name": "Priya Raman"},
+    {"username": "consumer05", "role": "consumer", "display_name": "Carlos Rivera"},
+    {"username": "consumer06", "role": "consumer", "display_name": "Taylor Brown"},
+    {"username": "consumer07", "role": "consumer", "display_name": "Nina Patel"},
+    {"username": "consumer08", "role": "consumer", "display_name": "Ethan Wilson"},
+    {"username": "consumer09", "role": "consumer", "display_name": "Sophia Chen"},
+    {"username": "consumer10", "role": "consumer", "display_name": "Marcus Davis"},
+    {"username": "supervisor01", "role": "supervisor", "display_name": "Dana Brooks"},
+    {"username": "supervisor02", "role": "supervisor", "display_name": "Riley Foster"},
+    {"username": "supervisor03", "role": "supervisor", "display_name": "Casey Nguyen"},
+    {"username": "admin01", "role": "admin", "display_name": "System Administrator"},
+]
 
 
 def require_backend_url():
@@ -79,25 +96,88 @@ def get_mcp_server_headers() -> dict[str, str]:
     return headers
 
 
+def load_gateway_headers() -> tuple[dict[str, str], list[str], list[str]]:
+    """Load MCP Gateway login headers from YAML/env without exposing values."""
+    headers: dict[str, str] = {}
+    header_names: list[str] = []
+    logs: list[str] = []
+
+    headers_json = os.getenv("MCP_GATEWAY_HEADERS_JSON")
+    if headers_json:
+        try:
+            parsed_headers = json.loads(headers_json)
+            for name, value in parsed_headers.items():
+                if value:
+                    headers[str(name)] = str(value)
+                    header_names.append(str(name))
+            logs.append("[CONFIG] Loaded MCP Gateway headers from MCP_GATEWAY_HEADERS_JSON")
+        except json.JSONDecodeError:
+            logs.append("[WARNING] MCP_GATEWAY_HEADERS_JSON is not valid JSON")
+
+    auth_name = os.getenv("MCP_GATEWAY_AUTH_HEADER_NAME")
+    auth_value = os.getenv("MCP_GATEWAY_AUTH_HEADER_VALUE")
+    if auth_name and auth_value:
+        headers[auth_name] = auth_value
+        header_names.append(auth_name)
+        logs.append("[CONFIG] Loaded MCP Gateway auth header from environment")
+
+    if MCP_GATEWAY_CONFIG_FILE:
+        try:
+            import yaml
+        except ImportError:
+            logs.append("[WARNING] PyYAML is not installed; YAML gateway config was not loaded")
+        else:
+            try:
+                with open(MCP_GATEWAY_CONFIG_FILE, "r", encoding="utf-8") as config_file:
+                    config = yaml.safe_load(config_file) or {}
+                yaml_headers = config.get("headers", {}) if isinstance(config, dict) else {}
+                if isinstance(yaml_headers, dict):
+                    for name, value in yaml_headers.items():
+                        if value:
+                            headers[str(name)] = str(value)
+                            header_names.append(str(name))
+                for key in ("api_key", "portkey_api_key", "virtual_key", "bearer_token"):
+                    value = config.get(key) if isinstance(config, dict) else None
+                    if value:
+                        header_name = "Authorization" if key == "bearer_token" else f"X-{key.replace('_', '-')}"
+                        header_value = f"Bearer {value}" if key == "bearer_token" else str(value)
+                        headers[header_name] = header_value
+                        header_names.append(header_name)
+                environment_data = config.get("environment", {}).get("data", {}) if isinstance(config, dict) else {}
+                client_auth = environment_data.get("PORTKEY_CLIENT_AUTH") if isinstance(environment_data, dict) else None
+                if client_auth:
+                    auth_header_name = os.getenv("MCP_GATEWAY_YAML_AUTH_HEADER", "Authorization")
+                    auth_header_value = (
+                        str(client_auth)
+                        if auth_header_name.lower() != "authorization"
+                        else f"Bearer {client_auth}"
+                    )
+                    headers[auth_header_name] = auth_header_value
+                    header_names.append(auth_header_name)
+                logs.append("[CONFIG] Loaded MCP Gateway YAML config file")
+            except OSError as error:
+                logs.append(f"[WARNING] Could not read MCP Gateway YAML config file: {error.strerror}")
+
+    return headers, sorted(set(header_names)), logs
+
+
 def mcp_gateway_rpc(
     method: str,
     params: dict | None = None,
     extra_headers: dict[str, str] | None = None,
 ) -> tuple[dict, int, list[str]]:
     """Call the configured MCP gateway using MCP JSON-RPC over HTTP."""
+    gateway_headers, header_names, logs = load_gateway_headers()
     headers = {
         "Accept": "application/json, text/event-stream",
         "Content-Type": "application/json",
+        **gateway_headers,
     }
-    logs: list[str] = []
     if extra_headers:
         headers.update(extra_headers)
     logs.append(f"[CONFIG] MCP Gateway URL: {MCP_GATEWAY_URL}")
-    if extra_headers:
-        logs.append(f"[CONFIG] MCP server login headers included: {', '.join(extra_headers.keys())}")
-    else:
-        logs.append("[CONFIG] MCP server login headers included: none")
-    logs.append("[AUTH] No gateway credential file is used for MCP Gateway mode")
+    logs.append(f"[CONFIG] Gateway credential headers configured: {', '.join(header_names) if header_names else 'none'}")
+    logs.append("[AUTH] MCP Gateway login uses YAML/env gateway credentials")
     logs.append(f"[MCP] JSON-RPC method: {method}")
 
     body = json.dumps(
@@ -171,9 +251,13 @@ def normalize_mcp_tool_result(payload: dict, logs: list[str]) -> dict:
 
 def mcp_gateway_proxy(path: str, payload: dict | None = None):
     """Proxy supported UI API calls to the MCP gateway protocol."""
-    mcp_headers = get_mcp_server_headers()
+    if path == "/api/agent/logins":
+        role = request.args.get("role")
+        logins = [login for login in DEMO_AGENT_LOGINS if not role or login["role"] == role]
+        return jsonify(logins), 200
+
     if path == "/api/agent/tools":
-        rpc_payload, status, logs = mcp_gateway_rpc("tools/list", extra_headers=mcp_headers)
+        rpc_payload, status, logs = mcp_gateway_rpc("tools/list")
         if status >= 400:
             return jsonify({"error": rpc_payload.get("error"), "logs": logs}), status
         return jsonify(normalize_mcp_tools(rpc_payload)), status
@@ -186,7 +270,6 @@ def mcp_gateway_proxy(path: str, payload: dict | None = None):
                 "name": payload.get("tool_name"),
                 "arguments": payload.get("params", {}),
             },
-            extra_headers=mcp_headers,
         )
         normalized = normalize_mcp_tool_result(rpc_payload, logs)
         return jsonify(normalized), status
@@ -303,11 +386,9 @@ def agent_connection_check():
     ]
 
     if mode == "mcp_gateway":
-        rpc_payload, status, gateway_logs = mcp_gateway_rpc(
-            "tools/list", extra_headers=get_mcp_server_headers()
-        )
+        rpc_payload, status, gateway_logs = mcp_gateway_rpc("tools/list")
         tools = normalize_mcp_tools(rpc_payload) if status < 400 else []
-        logs.append("[CHECK] Calling MCP Gateway tools/list with MCP server username/password headers")
+        logs.append("[CHECK] Calling MCP Gateway tools/list with YAML/env gateway credentials")
         logs.append("[AUTH] Consumer/supervisor/admin headers are not forwarded to MCP Gateway")
         logs.extend(gateway_logs)
         connected = status < 400
@@ -330,7 +411,7 @@ def agent_connection_check():
                     "url": MCP_GATEWAY_URL,
                     "host": backend_host,
                     "status_code": status,
-                    "headers_configured": bool(get_mcp_server_headers()),
+                    "headers_configured": True,
                     "logs": gateway_logs,
                     "error": rpc_payload.get("error") if isinstance(rpc_payload, dict) else None,
                 },
@@ -433,8 +514,8 @@ def agent_gateway_preflight():
     connected = status < 400
     logs = [
         "[FLOW] Pre-login MCP Gateway connection check",
-        "[AUTH] MCP Gateway uses MCP server username/password headers only",
-        "[AUTH] MCP server username/password is used in the MCP Server Login step",
+        "[AUTH] MCP Gateway uses YAML/env gateway credentials",
+        "[AUTH] MCP server username/password login is skipped for MCP Gateway mode",
     ]
     logs.extend(gateway_logs)
     logs.append(
@@ -458,12 +539,8 @@ def agent_gateway_preflight():
 def agent_mcp_login():
     """Validate MCP server header login for the selected flow."""
     mode, base_url = get_target_url()
-    mcp_headers = get_mcp_server_headers()
-    if not mcp_headers.get("X-MCP-Server-Username") or not mcp_headers.get("X-MCP-Server-Password"):
-        return jsonify({"authenticated": False, "error": "MCP server username and password are required"}), 400
-
     if mode == "mcp_gateway":
-        rpc_payload, status, logs = mcp_gateway_rpc("tools/list", extra_headers=mcp_headers)
+        rpc_payload, status, logs = mcp_gateway_rpc("tools/list")
         authenticated = status < 400
         return jsonify(
             {
@@ -471,13 +548,16 @@ def agent_mcp_login():
                 "route_mode": mode,
                 "route_url": MCP_GATEWAY_URL,
                 "logs": [
-                    "[FLOW] MCP server login through MCP Gateway",
-                    "[AUTH] MCP Gateway uses MCP server username/password headers only",
-                    "[AUTH] MCP server username/password headers sent to MCP Gateway",
+                    "[FLOW] MCP Gateway login with YAML/env credentials",
+                    "[AUTH] MCP server username/password login skipped for MCP Gateway mode",
                 ] + logs,
-                "error": None if authenticated else rpc_payload.get("error", "MCP Gateway rejected MCP server login"),
+                "error": None if authenticated else rpc_payload.get("error", "MCP Gateway rejected login"),
             }
         ), 200 if authenticated else status
+
+    mcp_headers = get_mcp_server_headers()
+    if not mcp_headers.get("X-MCP-Server-Username") or not mcp_headers.get("X-MCP-Server-Password"):
+        return jsonify({"authenticated": False, "error": "MCP server username and password are required"}), 400
 
     missing_target = require_target_url(base_url, mode)
     if missing_target:

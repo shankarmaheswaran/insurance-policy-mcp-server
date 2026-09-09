@@ -94,6 +94,35 @@
     white-space: nowrap;
 }
 
+.gateway-preflight-panel {
+    align-items: center;
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding: 14px;
+}
+
+.gateway-preflight-status {
+    color: var(--text-light);
+    font-weight: 700;
+}
+
+.gateway-preflight-status.connected {
+    color: var(--success-color);
+}
+
+.gateway-preflight-status.blocked {
+    color: var(--danger-color);
+}
+
+.gateway-preflight-status.checking {
+    color: var(--warning-color);
+}
+
 .role-options {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));

@@ -17,11 +17,12 @@ let mcpServerSession = {
     authenticated: false
 };
 let connectionMode = "direct";
+let gatewayPreflightConnected = false;
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
     restoreAgentSession();
-    document.getElementById("loginSelector").innerHTML = '<option value="">Login to MCP server first</option>';
+    document.getElementById("loginSelector").innerHTML = '<option value="">Authenticate selected flow first</option>';
     if (isLoggedIn()) {
         showProtectedAgentSections();
         await verifyConnection();
@@ -57,7 +58,7 @@ function getAgentHeaders() {
     if (agentSession.username) {
         headers["X-Policy-Agent-Username"] = agentSession.username;
     }
-    if (mcpServerSession.authenticated) {
+    if (connectionMode !== "mcp_gateway" && mcpServerSession.authenticated) {
         headers["X-MCP-Server-Username"] = mcpServerSession.username;
         headers["X-MCP-Server-Password"] = mcpServerSession.password;
     }
@@ -66,6 +67,7 @@ function getAgentHeaders() {
 
 function setConnectionMode(mode) {
     connectionMode = ["direct", "mcp_gateway", "demo_lab"].includes(mode) ? mode : "direct";
+    gatewayPreflightConnected = false;
     agentSession = { username: "", role: "", displayName: "" };
     mcpServerSession = { username: "", password: "", authenticated: false };
     availableTools = [];
@@ -100,6 +102,8 @@ function updateConnectionModeDisplay() {
     document.getElementById("gatewayModeButton").classList.toggle("active", connectionMode === "mcp_gateway");
     document.getElementById("demoLabModeButton").classList.toggle("active", connectionMode === "demo_lab");
     document.getElementById("activeRoute").textContent = getConnectionModeLabel();
+    document.getElementById("gatewayPreflightPanel").classList.toggle("hidden", connectionMode !== "mcp_gateway");
+    document.getElementById("mcpServerLoginSection").classList.toggle("hidden", connectionMode === "mcp_gateway");
     document.querySelectorAll(".gateway-only").forEach(element => {
         element.classList.toggle("hidden", connectionMode !== "mcp_gateway");
     });
@@ -118,12 +122,22 @@ function updateConnectionModeDisplay() {
 }
 
 function updateLoginAvailability() {
-    const loginDisabled = !mcpServerSession.authenticated;
+    const loginDisabled = connectionMode === "mcp_gateway"
+        ? !gatewayPreflightConnected
+        : !mcpServerSession.authenticated;
     document.getElementById("loginSelector").disabled = loginDisabled;
     document.getElementById("loginButton").disabled = loginDisabled;
     document.querySelectorAll('input[name="agentRole"]').forEach(input => {
         input.disabled = loginDisabled;
     });
+
+    if (connectionMode === "mcp_gateway") {
+        const status = document.getElementById("gatewayPreflightStatus");
+        status.className = `gateway-preflight-status ${gatewayPreflightConnected ? "connected" : "blocked"}`;
+        status.textContent = gatewayPreflightConnected
+            ? "MCP Gateway connection established with YAML credentials. Agent login is now enabled."
+            : "Connect MCP Gateway with YAML credentials before selecting a demo login.";
+    }
 }
 
 function updateMcpServerLoginDisplay() {
@@ -191,6 +205,50 @@ async function loginMcpServer() {
     }
 }
 
+async function connectMcpGatewayBeforeLogin() {
+    const status = document.getElementById("gatewayPreflightStatus");
+    const button = document.getElementById("gatewayPreflightButton");
+    gatewayPreflightConnected = false;
+    updateConnectionModeDisplay();
+    clearLogs();
+    updateLoginAvailability();
+    status.className = "gateway-preflight-status checking";
+    status.textContent = "Connecting to MCP Gateway using YAML credentials...";
+    button.disabled = true;
+    addLog("[FLOW] Starting MCP Gateway login before agent role selection", "info");
+    addLog("[AUTH] Using YAML gateway credentials only for MCP Gateway mode", "info");
+
+    try {
+        const response = await fetch("/api/agent/gateway-preflight", {
+            headers: { "X-Policy-Connection-Mode": "mcp_gateway" }
+        });
+        const data = await response.json();
+        gatewayPreflightConnected = Boolean(response.ok && data.connected);
+        status.className = `gateway-preflight-status ${gatewayPreflightConnected ? "connected" : "blocked"}`;
+        status.textContent = gatewayPreflightConnected
+            ? "MCP Gateway connected with YAML credentials. Choose a demo role login."
+            : `MCP Gateway login failed: ${data.error || `HTTP ${response.status}`}`;
+        (data.logs || []).forEach(logMsg => {
+            const level = logMsg.includes("[ERROR]") ? "error" :
+                logMsg.includes("[SUCCESS]") ? "success" : "info";
+            addLog(logMsg, level);
+        });
+    } catch (error) {
+        gatewayPreflightConnected = false;
+        status.className = "gateway-preflight-status blocked";
+        status.textContent = `MCP Gateway login failed: ${error.message}`;
+        addLog(`[ERROR] MCP Gateway login failed: ${error.message}`, "error");
+    } finally {
+        button.disabled = false;
+    }
+
+    updateLoginAvailability();
+    updateRouteModeItems();
+    if (gatewayPreflightConnected) {
+        await loadLoginOptions();
+    }
+}
+
 function initializeLabOutputPlaceholders() {
     document.querySelectorAll(".injection-test-card").forEach(card => {
         if (!card.querySelector(".lab-inline-output")) {
@@ -215,7 +273,9 @@ function updateRouteModeItems() {
     const container = document.getElementById("routeModeItems");
     const routeLabel = getConnectionModeLabel();
     if (!isLoggedIn()) {
-        container.innerHTML = `${routeLabel} selected. Login to the MCP server next, then choose a demo role login.`;
+        container.innerHTML = connectionMode === "mcp_gateway"
+            ? `${routeLabel} selected. Connect MCP Gateway with YAML credentials, then choose a demo role login.`
+            : `${routeLabel} selected. Login to the MCP server next, then choose a demo role login.`;
         return;
     }
 

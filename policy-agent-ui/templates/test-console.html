@@ -35,7 +35,11 @@
                     <button type="button" id="demoLabModeButton" class="route-toggle-button" onclick="setConnectionMode('demo_lab')">Demo Lab</button>
                 </div>
                 <div id="routeModeItems" class="route-mode-items">
-                    Direct mode uses the EC2 MCP backend. MCP GW mode uses MCP server username/password headers through the Palo Alto / Portkey MCP Gateway. Demo Lab shows firewall validation scenarios.
+                    Direct mode uses the EC2 MCP backend. MCP GW mode uses YAML credentials to reach the Palo Alto / Portkey MCP Gateway. Demo Lab shows firewall validation scenarios.
+                </div>
+                <div id="gatewayPreflightPanel" class="gateway-preflight-panel hidden">
+                    <button type="button" id="gatewayPreflightButton" class="btn btn-primary" onclick="connectMcpGatewayBeforeLogin()">Connect MCP Gateway</button>
+                    <div id="gatewayPreflightStatus" class="gateway-preflight-status">MCP Gateway must be connected with YAML credentials before agent login.</div>
                 </div>
             </section>
 
@@ -44,7 +48,7 @@
                 <div class="mcp-server-login-header">
                     <div>
                         <h2>MCP Server Login</h2>
-                        <p>Authenticate to the selected flow with MCP server username/password headers before role login.</p>
+                        <p>Authenticate to Direct EC2 with MCP server username/password headers before role login.</p>
                     </div>
                     <div class="active-mcp-login" id="activeMcpLogin">Not connected</div>
                 </div>

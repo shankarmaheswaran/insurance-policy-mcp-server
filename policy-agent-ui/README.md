@@ -16,13 +16,15 @@ To validate a Palo Alto / Portkey MCP AI Gateway from the agent connection panel
 ```bash
 POLICY_BACKEND_URL=http://<ec2-public-ip-or-dns>:5000 \
 MCP_GATEWAY_URL=https://mcp-aigw.portkey.ai/insurance-mcp/mcp \
+MCP_GATEWAY_CONFIG_FILE=/path/to/gateway-values.yaml \
 python3 app.py
 ```
 
-MCP Gateway mode uses the MCP server username/password entered in the UI and sends them as normal MCP server headers. It does not use a gateway credential file.
+MCP Gateway mode uses the YAML gateway credential file for gateway login. It skips the MCP server username/password login step in that flow only.
 
 Optional gateway settings:
 
+- `MCP_GATEWAY_CONFIG_FILE`: local YAML file containing MCP Gateway login headers or Portkey client auth values.
 - `MCP_GATEWAY_VERIFY_SSL`: set to `0` only for local POC testing when Python cannot verify the gateway certificate chain.
 
 Open:
