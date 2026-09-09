@@ -11,13 +11,18 @@ let agentSession = {
     role: "",
     displayName: ""
 };
+let mcpServerSession = {
+    username: "",
+    password: "",
+    authenticated: false
+};
 let connectionMode = "direct";
 let gatewayPreflightConnected = false;
 
 // Load tools on page load
 document.addEventListener("DOMContentLoaded", async () => {
     restoreAgentSession();
-    await loadLoginOptions();
+    document.getElementById("loginSelector").innerHTML = '<option value="">Login to MCP server first</option>';
     if (isLoggedIn()) {
         showProtectedAgentSections();
         await verifyConnection();
@@ -53,6 +58,10 @@ function getAgentHeaders() {
     if (agentSession.username) {
         headers["X-Policy-Agent-Username"] = agentSession.username;
     }
+    if (mcpServerSession.authenticated) {
+        headers["X-MCP-Server-Username"] = mcpServerSession.username;
+        headers["X-MCP-Server-Password"] = mcpServerSession.password;
+    }
     return headers;
 }
 
@@ -60,10 +69,12 @@ function setConnectionMode(mode) {
     connectionMode = ["direct", "mcp_gateway", "demo_lab"].includes(mode) ? mode : "direct";
     gatewayPreflightConnected = false;
     agentSession = { username: "", role: "", displayName: "" };
+    mcpServerSession = { username: "", password: "", authenticated: false };
     availableTools = [];
     currentTool = null;
     routeToolError = "";
     updateConnectionModeDisplay();
+    updateMcpServerLoginDisplay();
     updateLoginAvailability();
     updateRoleDisplay();
     updateRouteModeItems();
@@ -110,7 +121,7 @@ function updateConnectionModeDisplay() {
 }
 
 function updateLoginAvailability() {
-    const loginDisabled = connectionMode === "mcp_gateway" && !gatewayPreflightConnected;
+    const loginDisabled = !mcpServerSession.authenticated || (connectionMode === "mcp_gateway" && !gatewayPreflightConnected);
     document.getElementById("loginSelector").disabled = loginDisabled;
     document.getElementById("loginButton").disabled = loginDisabled;
     document.querySelectorAll('input[name="agentRole"]').forEach(input => {
@@ -123,6 +134,78 @@ function updateLoginAvailability() {
         status.textContent = gatewayPreflightConnected
             ? "MCP Gateway connection established with YAML credentials. Agent login is now enabled."
             : "Connect MCP Gateway with YAML credentials before selecting a demo login.";
+    }
+}
+
+function updateMcpServerLoginDisplay() {
+    const badge = document.getElementById("activeMcpLogin");
+    const status = document.getElementById("mcpServerLoginStatus");
+    if (mcpServerSession.authenticated) {
+        badge.textContent = `Connected: ${mcpServerSession.username}`;
+        status.className = "mcp-server-login-status connected";
+        status.textContent = "MCP server header login succeeded. Consumer/supervisor/admin login is now available.";
+    } else {
+        badge.textContent = "Not connected";
+        status.className = "mcp-server-login-status blocked";
+        status.textContent = connectionMode === "mcp_gateway" && !gatewayPreflightConnected
+            ? "Connect MCP Gateway first, then login to the MCP server."
+            : "MCP server login is required before selecting consumer, supervisor, or admin.";
+    }
+}
+
+async function loginMcpServer() {
+    if (connectionMode === "mcp_gateway" && !gatewayPreflightConnected) {
+        alert("Connect MCP Gateway with YAML credentials before MCP server login.");
+        return;
+    }
+
+    const username = document.getElementById("mcpServerUsername").value.trim();
+    const password = document.getElementById("mcpServerPassword").value;
+    const status = document.getElementById("mcpServerLoginStatus");
+    if (!username || !password) {
+        alert("Enter MCP server username and password.");
+        return;
+    }
+
+    status.className = "mcp-server-login-status blocked";
+    status.textContent = "Checking MCP server header login...";
+    clearLogs();
+    addLog(`[FLOW] MCP server login through ${getConnectionModeLabel()}`, "info");
+    addLog("[AUTH] Sending normal MCP server login headers. Password value is hidden.", "info");
+
+    try {
+        const response = await fetch("/api/agent/mcp-login", {
+            method: "POST",
+            headers: {
+                "X-Policy-Connection-Mode": connectionMode,
+                "X-MCP-Server-Username": username,
+                "X-MCP-Server-Password": password
+            }
+        });
+        const data = await response.json();
+        mcpServerSession = {
+            username,
+            password: response.ok && data.authenticated ? password : "",
+            authenticated: Boolean(response.ok && data.authenticated)
+        };
+        (data.logs || []).forEach(logMsg => {
+            const level = logMsg.includes("[ERROR]") ? "error" :
+                logMsg.includes("[SUCCESS]") ? "success" : "info";
+            addLog(logMsg, level);
+        });
+        if (!mcpServerSession.authenticated) {
+            addLog(`[ERROR] MCP server login failed: ${data.error || `HTTP ${response.status}`}`, "error");
+        }
+    } catch (error) {
+        mcpServerSession = { username: "", password: "", authenticated: false };
+        addLog(`[ERROR] MCP server login failed: ${error.message}`, "error");
+    }
+
+    updateMcpServerLoginDisplay();
+    updateLoginAvailability();
+    updateRouteModeItems();
+    if (mcpServerSession.authenticated) {
+        await loadLoginOptions();
     }
 }
 
@@ -159,6 +242,7 @@ async function connectMcpGatewayBeforeLogin() {
         addLog(`[ERROR] MCP Gateway preflight failed: ${error.message}`, "error");
     } finally {
         button.disabled = false;
+        updateMcpServerLoginDisplay();
         updateLoginAvailability();
         updateRouteModeItems();
     }
@@ -222,6 +306,7 @@ function restoreAgentSession() {
         roleInput.checked = true;
     }
     updateConnectionModeDisplay();
+    updateMcpServerLoginDisplay();
     updateLoginAvailability();
     updateRoleDisplay();
     updateRouteModeItems();

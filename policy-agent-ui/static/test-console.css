@@ -41,7 +41,7 @@
 }
 
 .role-login-section {
-    order: 2;
+    order: 3;
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--primary-color);
     border-radius: 8px;
@@ -50,7 +50,18 @@
     background: white;
 }
 
+.mcp-server-login-section {
+    order: 2;
+    border: 2px solid var(--border-color);
+    border-left: 4px solid var(--warning-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    background: white;
+}
+
 .flow-selection-header,
+.mcp-server-login-header,
 .role-login-header {
     display: flex;
     justify-content: space-between;
@@ -60,16 +71,19 @@
 }
 
 .flow-selection-header h2,
+.mcp-server-login-header h2,
 .role-login-header h2 {
     margin-bottom: 6px;
 }
 
 .flow-selection-header p,
+.mcp-server-login-header p,
 .role-login-header p {
     color: var(--text-light);
 }
 
 .active-route,
+.active-mcp-login,
 .active-role {
     background: var(--light-bg);
     border: 1px solid var(--border-color);
@@ -122,6 +136,33 @@
     grid-template-columns: minmax(240px, 1fr) auto auto auto;
     gap: 12px;
     align-items: center;
+}
+
+.mcp-server-login-actions {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.mcp-server-login-status {
+    border-radius: 6px;
+    font-weight: 800;
+    line-height: 1.4;
+    padding: 10px 12px;
+}
+
+.mcp-server-login-status.connected {
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    color: #166534;
+}
+
+.mcp-server-login-status.blocked {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
 }
 
 .route-toggle {
@@ -253,7 +294,7 @@
 }
 
 .connection-section {
-    order: 4;
+    order: 5;
     border: 2px solid var(--border-color);
     border-left: 4px solid var(--warning-color);
     border-radius: 8px;
@@ -368,7 +409,7 @@
 }
 
 .tool-selector-section {
-    order: 5;
+    order: 6;
     background: var(--light-bg);
     padding: 20px;
     border-radius: 8px;
@@ -387,7 +428,7 @@
 
 /* Test Area Layout */
 .test-area {
-    order: 6;
+    order: 7;
     display: grid;
     grid-template-columns: 1fr;
     gap: 22px;
@@ -639,7 +680,7 @@
 }
 
 .logs-panel {
-    order: 7;
+    order: 8;
     grid-column: 1 / -1;
     border-left: 4px solid #f59e0b;
     max-height: 400px;
@@ -885,7 +926,7 @@
 
 /* Tool Docs */
 .tool-docs-section {
-    order: 8;
+    order: 9;
     background: var(--light-bg);
     padding: 25px;
     border-radius: 8px;
@@ -964,7 +1005,7 @@
 }
 
 .injection-tests-section {
-    order: 3;
+    order: 4;
     background: #fff7ed;
     border: 1px solid #fed7aa;
     border-radius: 8px;

@@ -43,6 +43,25 @@
                 </div>
             </section>
 
+            <!-- MCP Server Login -->
+            <section class="mcp-server-login-section" id="mcpServerLoginSection">
+                <div class="mcp-server-login-header">
+                    <div>
+                        <h2>MCP Server Login</h2>
+                        <p>Authenticate to the selected MCP server flow with normal headers before role login.</p>
+                    </div>
+                    <div class="active-mcp-login" id="activeMcpLogin">Not connected</div>
+                </div>
+                <div class="mcp-server-login-actions">
+                    <input type="text" id="mcpServerUsername" class="input-field" placeholder="MCP server username" autocomplete="username">
+                    <input type="password" id="mcpServerPassword" class="input-field" placeholder="MCP server password" autocomplete="current-password">
+                    <button id="mcpServerLoginButton" onclick="loginMcpServer()" class="btn btn-primary">Login to MCP Server</button>
+                </div>
+                <div id="mcpServerLoginStatus" class="mcp-server-login-status blocked">
+                    MCP server login is required before selecting consumer, supervisor, or admin.
+                </div>
+            </section>
+
             <!-- Role Login -->
             <section class="role-login-section" id="roleLoginSection">
                 <div class="role-login-header">

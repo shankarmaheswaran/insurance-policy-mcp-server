@@ -190,7 +190,23 @@ def read_gateway_json(response) -> dict:
         raise
 
 
-def mcp_gateway_rpc(method: str, params: dict | None = None) -> tuple[dict, int, list[str]]:
+def get_mcp_server_headers() -> dict[str, str]:
+    """Read MCP server login headers from the local agent request."""
+    headers = {}
+    username = request.headers.get("X-MCP-Server-Username")
+    password = request.headers.get("X-MCP-Server-Password")
+    if username:
+        headers["X-MCP-Server-Username"] = username
+    if password:
+        headers["X-MCP-Server-Password"] = password
+    return headers
+
+
+def mcp_gateway_rpc(
+    method: str,
+    params: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
+) -> tuple[dict, int, list[str]]:
     """Call the configured MCP gateway using MCP JSON-RPC over HTTP."""
     headers, header_names, logs = load_gateway_headers()
     headers.update(
@@ -199,8 +215,12 @@ def mcp_gateway_rpc(method: str, params: dict | None = None) -> tuple[dict, int,
             "Content-Type": "application/json",
         }
     )
+    if extra_headers:
+        headers.update(extra_headers)
     logs.append(f"[CONFIG] MCP Gateway URL: {MCP_GATEWAY_URL}")
     logs.append(f"[CONFIG] Credential headers configured: {', '.join(header_names) if header_names else 'none'}")
+    if extra_headers:
+        logs.append(f"[CONFIG] MCP server login headers included: {', '.join(extra_headers.keys())}")
     logs.append(f"[MCP] JSON-RPC method: {method}")
 
     body = json.dumps(
@@ -274,8 +294,9 @@ def normalize_mcp_tool_result(payload: dict, logs: list[str]) -> dict:
 
 def mcp_gateway_proxy(path: str, payload: dict | None = None):
     """Proxy supported UI API calls to the MCP gateway protocol."""
+    mcp_headers = get_mcp_server_headers()
     if path == "/api/agent/tools":
-        rpc_payload, status, logs = mcp_gateway_rpc("tools/list")
+        rpc_payload, status, logs = mcp_gateway_rpc("tools/list", extra_headers=mcp_headers)
         if status >= 400:
             return jsonify({"error": rpc_payload.get("error"), "logs": logs}), status
         return jsonify(normalize_mcp_tools(rpc_payload)), status
@@ -288,6 +309,7 @@ def mcp_gateway_proxy(path: str, payload: dict | None = None):
                 "name": payload.get("tool_name"),
                 "arguments": payload.get("params", {}),
             },
+            extra_headers=mcp_headers,
         )
         normalized = normalize_mcp_tool_result(rpc_payload, logs)
         return jsonify(normalized), status
@@ -318,6 +340,7 @@ def backend_request(path: str, method: str = "GET", payload: dict | None = None)
     agent_role = request.headers.get("X-Policy-Agent-Role")
     agent_username = request.headers.get("X-Policy-Agent-Username")
     agent_customer_id = request.headers.get("X-Policy-Agent-Customer-Id")
+    headers.update(get_mcp_server_headers())
     if agent_role:
         headers["X-Policy-Agent-Role"] = agent_role
     if agent_username:
@@ -408,7 +431,9 @@ def agent_connection_check():
     ]
 
     if mode == "mcp_gateway":
-        rpc_payload, status, gateway_logs = mcp_gateway_rpc("tools/list")
+        rpc_payload, status, gateway_logs = mcp_gateway_rpc(
+            "tools/list", extra_headers=get_mcp_server_headers()
+        )
         tools = normalize_mcp_tools(rpc_payload) if status < 400 else []
         logs.append("[CHECK] Calling MCP Gateway tools/list with YAML credentials only")
         logs.append("[AUTH] Consumer/supervisor/admin headers are not forwarded to MCP Gateway")
@@ -455,7 +480,7 @@ def agent_connection_check():
         logs.append(f"[AUTH] Customer scope: {agent_customer_id}")
 
     try:
-        active_headers = {"Accept": "application/json"}
+        active_headers = {"Accept": "application/json", **get_mcp_server_headers()}
         gateway = None
         ssl_context = None
 
@@ -557,6 +582,73 @@ def agent_gateway_preflight():
             "error": None if connected else rpc_payload.get("error", "MCP Gateway rejected request"),
         }
     ), 200 if connected else status
+
+
+@app.route("/api/agent/mcp-login", methods=["POST"])
+def agent_mcp_login():
+    """Validate MCP server header login for the selected flow."""
+    mode, base_url = get_target_url()
+    mcp_headers = get_mcp_server_headers()
+    if not mcp_headers.get("X-MCP-Server-Username") or not mcp_headers.get("X-MCP-Server-Password"):
+        return jsonify({"authenticated": False, "error": "MCP server username and password are required"}), 400
+
+    if mode == "mcp_gateway":
+        rpc_payload, status, logs = mcp_gateway_rpc("tools/list", extra_headers=mcp_headers)
+        authenticated = status < 400
+        return jsonify(
+            {
+                "authenticated": authenticated,
+                "route_mode": mode,
+                "route_url": MCP_GATEWAY_URL,
+                "logs": [
+                    "[FLOW] MCP server login through MCP Gateway",
+                    "[AUTH] YAML gateway credentials used for gateway access",
+                    "[AUTH] MCP server login headers included for upstream MCP server",
+                ] + logs,
+                "error": None if authenticated else rpc_payload.get("error", "MCP Gateway rejected MCP server login"),
+            }
+        ), 200 if authenticated else status
+
+    missing_target = require_target_url(base_url, mode)
+    if missing_target:
+        return missing_target
+
+    try:
+        outbound_request = Request(f"{base_url}/mcp-login", headers=mcp_headers, method="POST")
+        with urlopen(outbound_request, timeout=15) as response:
+            response_body = json.loads(response.read().decode("utf-8"))
+            response_body["route_mode"] = mode
+            response_body["route_url"] = base_url
+            response_body["logs"] = [
+                "[FLOW] MCP server login through Direct EC2",
+                "[AUTH] MCP server login headers sent to EC2 backend",
+                f"[SUCCESS] EC2 MCP server login returned HTTP {response.status}",
+            ]
+            return jsonify(response_body), response.status
+    except HTTPError as error:
+        error_body = error.read().decode("utf-8")
+        try:
+            response_body = json.loads(error_body)
+        except json.JSONDecodeError:
+            response_body = {"error": error_body or error.reason}
+        response_body["authenticated"] = False
+        response_body["route_mode"] = mode
+        response_body["route_url"] = base_url
+        response_body["logs"] = [
+            "[FLOW] MCP server login through Direct EC2",
+            f"[ERROR] EC2 MCP server login returned HTTP {error.code}: {error.reason}",
+        ]
+        return jsonify(response_body), error.code
+    except URLError as error:
+        return jsonify(
+            {
+                "authenticated": False,
+                "route_mode": mode,
+                "route_url": base_url,
+                "logs": ["[FLOW] MCP server login through Direct EC2", f"[ERROR] {error.reason}"],
+                "error": str(error.reason),
+            }
+        ), 502
 
 
 @app.route("/api/policies", methods=["GET"])
